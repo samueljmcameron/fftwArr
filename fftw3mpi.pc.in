@@ -1,0 +1,11 @@
+prefix="@FFTW_MPI_BASE_DIR@"
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: FFTW-MPI
+Description: fast Fourier transform library-mpi
+Version: 3.3.10
+Libs: -L${libdir} -lfftw3 -lfftw3_mpi
+Libs.private: -lm
+Cflags: -I${includedir}

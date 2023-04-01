@@ -1,0 +1,10 @@
+prefix="@CMAKE_INSTALL_PREFIX@"
+libdir="${prefix}/lib"
+includedir="${prefix}/include"
+
+Name: @PROJECT_NAME@
+Description: @CMAKE_PROJECT_DESCRIPTION@
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -l@target1@
+Requires: fftw3 >= 3.3.10

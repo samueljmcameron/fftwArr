@@ -29,7 +29,7 @@ public:
 
   array3D(const MPI_Comm &,std::string,
 	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
-  array3D(const fftw_MPI_3Darray<T> &,std::string name = "");
+  array3D(const array3D<T> &,std::string name = "");
 
 
   void reverseFlat(int,  int &, int &, int &) const;
@@ -44,6 +44,11 @@ public:
   T* data() {
     return arr;
   };
+  T* data() const {
+    return arr;
+  };
+
+  
 
   ptrdiff_t totalsize() const {
     return size;
