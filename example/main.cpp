@@ -32,7 +32,6 @@ int main()
   int Nz = 20;
   double L = 2*M_PI;
 
-  std::cout << __cplusplus << std::endl;
   // define the array to be transform, phi(x,y,z), in both real and fourier space
   fftwArr::array3D<double> phi(MPI_COMM_WORLD,"phi",Nx,Ny,Nz);
 

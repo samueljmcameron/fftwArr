@@ -34,7 +34,7 @@ pkg_check_modules(FFTWARR IMPORTED_TARGET REQUIRED fftw_arr)
 
 add_executable(sinewave-bin main.cpp)
 
-target_link_libraries(sinewave-bin PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI ${FFTW_MPI_LIB} PkgConfig::FFTWARR)
+target_link_libraries(sinewave-bin PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})
