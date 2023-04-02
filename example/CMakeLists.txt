@@ -25,7 +25,10 @@ set(PKG_CHECK_MODULES_STATIC)
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-pkg_check_modules(FFTW-MPI IMPORTED_TARGET REQUIRED fftw3mpi)
+pkg_check_modules(FFTW-MPI IMPORTED_TARGET QUIET fftw3mpi)
+if (NOT FFTW-MPI_FOUND)
+  message(FATAL_ERROR "Need to specify where to find fftw_arr in CMAKE_PREFIX_PATH")
+endif()
 
 pkg_check_modules(FFTWARR IMPORTED_TARGET REQUIRED fftw_arr)
 
