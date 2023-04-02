@@ -1,26 +1,27 @@
 #include <mpi.h>
 #include <complex>
 #include <cmath>
-#include <vector>
+#include <array>
 #include <fstream>
 #include <iostream>
 
 #include "fftw_arr/array3d.hpp"
 
 void initialize_phi(fftwArr::array3D<double> &,double ,int,int,int);
-void initialize_gradphi(std::vector<fftwArr::array3D<double>> &gradphi,double L,
-			int Nx, int Ny, int Nz);
+void initialize_gradphi(std::array<fftwArr::array3D<double>,3> &,double,
+			int , int , int );
 
-void compute_gradients(std::vector<fftwArr::array3D<std::complex<double>>> &,
+void compute_gradients(std::array<fftwArr::array3D<std::complex<double>>,3> &,
 		       const fftwArr::array3D<std::complex<double>> &,
 		       double,int,int,int); 
 void save_outputs(const fftwArr::array3D<double> &,
-		  const std::vector<fftwArr::array3D<double>> &,
+		  const std::array<fftwArr::array3D<double>,3> &,
 		  double, int, int, int);
 
 int main()
 {
   
+
   
   int ierr = MPI_Init(NULL,NULL);
 
@@ -31,6 +32,7 @@ int main()
   int Nz = 20;
   double L = 2*M_PI;
 
+  std::cout << __cplusplus << std::endl;
   // define the array to be transform, phi(x,y,z), in both real and fourier space
   fftwArr::array3D<double> phi(MPI_COMM_WORLD,"phi",Nx,Ny,Nz);
 
@@ -38,15 +40,15 @@ int main()
   fftwArr::array3D<std::complex<double>> ft_phi(MPI_COMM_WORLD,"ft_phi",Nx,Nz,Ny);
 
   // define arrays to hold the gradients in both real and fourier space
-  std::vector<fftwArr::array3D<double>> gradphi;
-  std::vector<fftwArr::array3D<std::complex<double>>> ft_gradphi;
+  std::array<fftwArr::array3D<double>,3> gradphi;
+  std::array<fftwArr::array3D<std::complex<double>>,3> ft_gradphi;
 
-  std::vector<std::string> xyz = {"x","y","z"};
+  std::array<std::string,3> xyz = {"x","y","z"};
 
   for (int i = 0; i < 3; i++) {
-    gradphi.push_back(fftwArr::array3D<double>(MPI_COMM_WORLD,"gradphi_"+xyz[i],Nx,Ny,Nz));
-    ft_gradphi.push_back(fftwArr::array3D<std::complex<double>>
-			 (MPI_COMM_WORLD,"ft_gradphi_"+xyz[i],Nx,Nz,Ny));
+    gradphi[i] = fftwArr::array3D<double>(MPI_COMM_WORLD,"gradphi_"+xyz[i],Nx,Ny,Nz);
+    ft_gradphi[i] = fftwArr::array3D<std::complex<double>>
+      (MPI_COMM_WORLD,"ft_gradphi_"+xyz[i],Nx,Nz,Ny);
   }
 
 
@@ -150,7 +152,7 @@ void initialize_phi(fftwArr::array3D<double> &phi,double L,
   }
 }
 
-void initialize_gradphi(std::vector<fftwArr::array3D<double>> &gradphi,double L,
+void initialize_gradphi(std::array<fftwArr::array3D<double>,3> &gradphi,double L,
 			int Nx, int Ny, int Nz)
 {
 
@@ -183,7 +185,7 @@ void initialize_gradphi(std::vector<fftwArr::array3D<double>> &gradphi,double L,
 
 
 void save_outputs(const fftwArr::array3D<double> &phi,
-		  const std::vector<fftwArr::array3D<double>> &gradphi,
+		  const std::array<fftwArr::array3D<double>,3> &gradphi,
 		  double L, int Nx, int Ny, int Nz)
 {
 
@@ -192,15 +194,6 @@ void save_outputs(const fftwArr::array3D<double> &phi,
   MPI_Comm_rank(MPI_COMM_WORLD,&me);
   MPI_Comm_size(MPI_COMM_WORLD,&nprocs);
   std::ofstream myfile("output_" + std::to_string(me) + ".txt");
-
-  for (int i = 0; i < nprocs; i++) {
-    if (i == me)
-      std::cout << "size of output array = (" << phi.Nx()
-		<< "," << phi.Ny() << "," << phi.Nz()
-		<< ")." << std::endl;
-    MPI_Barrier(MPI_COMM_WORLD);
-
-  }
 
   double dx = L/Nx;
   double dy = L/Ny;
@@ -233,7 +226,7 @@ void save_outputs(const fftwArr::array3D<double> &phi,
 }
 		  
 
-void compute_gradients(std::vector<fftwArr::array3D<std::complex<double>>> &ft_gradphi,
+void compute_gradients(std::array<fftwArr::array3D<std::complex<double>>,3> &ft_gradphi,
 		       const fftwArr::array3D<std::complex<double>> &ft_phi,  double L,
 		       int Nx, int Ny, int Nz)
 {

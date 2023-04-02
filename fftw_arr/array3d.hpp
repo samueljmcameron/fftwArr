@@ -27,11 +27,16 @@ private:
   
 public:
 
+  array3D();
   array3D(const MPI_Comm &,std::string,
 	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
   array3D(const array3D<T> &,std::string name = "");
 
 
+  void assign(const MPI_Comm &,std::string,
+	      ptrdiff_t, ptrdiff_t, ptrdiff_t);
+
+  
   void reverseFlat(int,  int &, int &, int &) const;
 
 

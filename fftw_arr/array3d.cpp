@@ -3,6 +3,17 @@
 
 using namespace fftwArr;
 
+
+template <typename T>
+array3D<T>::array3D()
+/*
+  Default constructor (does nothing).
+*/
+{
+  arr=nullptr;
+};
+
+
 template <typename T>
 array3D<T>::array3D(const MPI_Comm &comm,std::string name,
 		    ptrdiff_t iNx, ptrdiff_t iNy, ptrdiff_t iNz)
@@ -107,7 +118,54 @@ array3D<T>::array3D(const array3D<T> & base,std::string name)
 
 
 
+template <typename T>
+void array3D<T>::assign(const MPI_Comm &comm,std::string name,
+			ptrdiff_t iNx, ptrdiff_t iNy, ptrdiff_t iNz)
+/*
+  Constructor for a 3D array with axis sizes (iNz,iNy,iNx) (the x dimension
+  varies the quickest). The array is not contiguous in memory for different
+  y and z indices. Values are either all doubles, or all std::complex.
 
+  Parameters
+  ----------
+  comm : mpi communicator
+      Typically MPI_COMM_WORLD, but could be other I suppose.
+  name : string
+      The name of the array (useful when needing to save data).
+      
+      
+*/
+{
+
+
+  ptrdiff_t local_n0;
+
+  alloc_local = fftw_mpi_local_size_3d(iNz, iNy , iNx/2 + 1,
+				       comm,&local_n0,&local_0_start);
+  
+
+  sizeax[0] = local_n0;
+  sizeax[1] = iNy;
+  
+  
+  if (typeid(T) == typeid(double)) {
+    sizeax[2] = iNx;
+    arr = (T*) fftw_alloc_real(2*alloc_local);
+    spacer = 2*(iNx/2+1);    
+    size = spacer*alloc_local;
+    
+  } else if (typeid(T) == typeid(std::complex<double>)) {
+    sizeax[2] = iNx/2+1;
+    spacer=iNx/2+1;
+    arr = (T*) fftw_alloc_complex(alloc_local);
+    size = alloc_local;
+  } else
+    throw std::runtime_error("array3D can only have type double, "
+			     "or std::complex<double>.");
+  
+  array_name = name;
+  
+};
 
 
 template <typename T>
