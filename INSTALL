@@ -8,7 +8,7 @@ from this directory do:
 
 mkdir build
 cd build
-cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=<insert prefix here> -D CMAKE_PREFIX_PATH=<path2fftw3> ../
+cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=<insert prefix here> -D FFTW_MPI_BASE_DIR=<wherever fftw3 mpi installation is located, usually /usr/local unless you've pass --prefix flag to fftw3 installation> ../
 make
 make install
 
