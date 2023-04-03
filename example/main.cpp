@@ -61,29 +61,13 @@ int main()
   
   std::array<fftw_plan,3> backward_gradphi;
 
-  backward_gradphi[0] = fftw_mpi_plan_dft_c2r_3d(Nz,Ny,Nx,
-						 reinterpret_cast<fftw_complex*>
-						 (ft_gradphi[0].data()),
-						 gradphi[0].data(),MPI_COMM_WORLD,
-						 FFTW_MPI_TRANSPOSED_IN);
 
-  // since we are using transformed arrays, the gradients y and z are swapped in fourier space
-
-  // NOTE HERE THE SWAP IN Z AND Y! THIS IS NOT A BUG!!!
-  backward_gradphi[1] = fftw_mpi_plan_dft_c2r_3d(Nz,Ny,Nx,
-						 reinterpret_cast<fftw_complex*>
-						 (ft_gradphi[1].data()),
-						 gradphi[2].data(), // <---HERE!! NOT A BUG!
-						 MPI_COMM_WORLD,
-						 FFTW_MPI_TRANSPOSED_IN);
-  // NOTE HERE THE SWAP IN Z AND Y! THIS IS NOT A BUG!!!
-  backward_gradphi[2] = fftw_mpi_plan_dft_c2r_3d(Nz,Ny,Nx,
-						 reinterpret_cast<fftw_complex*>
-						 (ft_gradphi[2].data()),
-						 gradphi[1].data(),// <---HERE!! NOT A BUG!
-						 MPI_COMM_WORLD,
-						 FFTW_MPI_TRANSPOSED_IN);
-
+  for (int i = 0; i < 3; i++)
+    backward_gradphi[i] = fftw_mpi_plan_dft_c2r_3d(Nz,Ny,Nx,
+						   reinterpret_cast<fftw_complex*>
+						   (ft_gradphi[i].data()),
+						   gradphi[i].data(),MPI_COMM_WORLD,
+						   FFTW_MPI_TRANSPOSED_IN);
 
 
   // initialise data for phi and compute fourier transform
@@ -253,8 +237,10 @@ void compute_gradients(std::array<fftwArr::array3D<std::complex<double>>,3> &ft_
 	n = k;
 	
 	ft_gradphi[0](i,j,k) = ft_phi(i,j,k)*idq*n;
-	ft_gradphi[1](i,j,k) = ft_phi(i,j,k)*idq*m;
-	ft_gradphi[2](i,j,k) = ft_phi(i,j,k)*idq*l;
+
+	// SWAP Y and Z here (m and l) since computing FFTW transpose.
+	ft_gradphi[1](i,j,k) = ft_phi(i,j,k)*idq*l;
+	ft_gradphi[2](i,j,k) = ft_phi(i,j,k)*idq*m;
 
       }
     }
