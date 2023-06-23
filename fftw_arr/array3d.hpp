@@ -76,7 +76,12 @@ public:
   }
 
 
-  
+  ptrdiff_t xysize() const
+  /* memory size of xy combined, accounting for array being non-contiguous
+     (i.e. NOT just Nx*Ny) */
+  {
+    return sizeax[1]*spacer;
+  }
   
 
   ptrdiff_t get_local0start() const {

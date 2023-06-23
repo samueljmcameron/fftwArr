@@ -60,7 +60,7 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
 			     "or std::complex<double>.");
   
   array_name = name;
-  
+  setZero();  
 };
 
 
@@ -164,6 +164,8 @@ void array3D<T>::assign(const MPI_Comm &comm,std::string name,
 			     "or std::complex<double>.");
   
   array_name = name;
+
+
   
 };
 
