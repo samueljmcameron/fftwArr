@@ -337,8 +337,8 @@ array3D<T>& array3D<T>::operator=(array3D<T> other)
 
 
 
-template class array3D<double>;
-template class array3D<std::complex<double>>;
+template class fftwArr::array3D<double>;
+template class fftwArr::array3D<std::complex<double>>;
 
 // Template below doesn't work because it forces return of double [2] array.
 //template class array3D<fftw_complex>; 
