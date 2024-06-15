@@ -12,17 +12,14 @@ template <typename T>
 class r2cArray
 {
 private:
-  T *arr;
-  ptrdiff_t alloc_local, local_0_start;
-
-  ptrdiff_t size;
-
+  T *arr;                        // pointer to array data
+  ptrdiff_t alloc_local;         // size of the locally allocated array (including all junk memory)
+  ptrdiff_t local_0_start;       // the global index that the local array starts at
   std::vector<ptrdiff_t> sizeax; // shape of array according to outside user (non-contiguous)
   
   int dimension;
   std::string array_name;
   int spacer;
-
   
 public:
 
@@ -49,19 +46,19 @@ public:
 
 
   // element-wise operations
-  void abs(r2cArray<double>&) const = 0; // absolute value acting element-wise on array
-  void mod(r2cArray<double>&) const = 0; // modulus (absolute value squared) acting element-wise on array
-  r2cArray<T>& operator/=(T rhs) = 0; // division operator
-  void setZero() = 0; // set all array components to zero
-  void running_mod(r2cArray<double>&) const = 0; // take a running modulus (i.e. add to argument array)
+
+  virtual r2cArray<T>& operator/=(T rhs) = 0; // division operator
+  virtual void setZero() = 0; // set all array components to zero
 
   
   T* data() { return arr;};
   T* data() const { return arr;};
-  ptrdiff_t totalsize() const {return size;};
-  ptrdiff_t xysize() const = 0;
+  virtual ptrdiff_t xysize() const = 0;
+
+  
   ptrdiff_t get_local0start() const {return local_0_start;};
   std::string get_name() const {return array_name;};
+  ptrdiff_t get_sizeax(int dim) { return sizeax.at(dim)};
 
 
   friend void swap(r2cArray<T>& first, r2cArray<T>& second)
@@ -71,7 +68,6 @@ public:
     swap(first.arr,second.arr);
     swap(first.alloc_local,second.alloc_local);
     swap(first.local_0_start,second.local_0_start);
-    swap(first.size,second.size);
     swap(first.sizeax,second.sizeax);
     swap(first.array_name,second.array_name);
     swap(first.spacer,second.spacer);
