@@ -10,15 +10,12 @@
 namespace fftwArr {
 
 template <typename T>
-class r2c2d : public r2cArray
+class r2c2d : public r2cArray<T>
 {
-private:
   
 public:
 
   r2c2d(); // default constructor which does nothing
-
-  r2c2d(const r2c2d<T> &,std::string name = ""); // copy constructor but with option to rename
 
   void assign(const MPI_Comm &,std::string, ptrdiff_t,ptrdiff_t); // actually allocates array
 
@@ -40,7 +37,7 @@ public:
   void running_mod(r2c2d<double>&) const;
 
   
-  virtual ptrdiff_t xysize() const override;
+  virtual ptrdiff_t subsize() const override { return this->spacer;};
 
 
 };

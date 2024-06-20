@@ -15,19 +15,10 @@ r2cArray<T>::r2cArray() : dimension(0)
 
 
 template <typename T>
-r2cArray<T>::r2cArray(const MPI_Comm &comm,std::string name,
-		      const std::vector<ptrdiff_t> lengths)
-{
-  assign(comm,name,lengths);
-  
-};
-
-
-template <typename T>
 r2cArray<T>::r2cArray(const r2cArray<T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
-    size(base.size),array_name(base.array_name), spacer(base.spacer),
-    dimension(base.dimension),sizeax=base.sizeax
+    array_name(base.array_name), spacer(base.spacer),
+    dimension(base.dimension),sizeax(base.sizeax)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the
@@ -108,12 +99,10 @@ void r2cArray<T>::assign(const MPI_Comm &comm,std::string name,
     sizeax[dimension-1] = lengths[dimension-1]; // reset sizeax[-1] to be Nx since real
     arr = (T*) fftw_alloc_real(2*alloc_local);  // see mpi 2d example in fftw doc
     spacer = 2*(lengths[dimension-1]/2+1);      // see mpi 2d example in fftw doc
-    size = spacer*alloc_local;                  // see mpi 2d example in fftw doc
     
   } else if (typeid(T) == typeid(std::complex<double>)) {
     spacer=sizeax[dimension-1];   
     arr = (T*) fftw_alloc_complex(alloc_local);
-    size = spacer*alloc_local;
   } else
     throw std::runtime_error("r2cArray can only have type double, "
 			     "or std::complex<double>.");
@@ -128,7 +117,7 @@ void r2cArray<T>::assign(const MPI_Comm &comm,std::string name,
 
 
 template <typename T>
-T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> indices)
+T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> &indices)
 /* read/write access array elements via indices vector. */
 {
 
@@ -137,7 +126,7 @@ T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> indices)
   for (int d = 1; d < dimension-2; d++)
     flat = flat*sizeax[dimension - 2 - d] + indices[d+1];
 
-  flat *= spacer
+  flat *= spacer;
   flat += indices[dimension-1];
   
   return arr[flat];
@@ -145,7 +134,7 @@ T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> indices)
 
 
 template <typename T>
-T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> & indices) const
+T r2cArray<T>::operator()(const std::vector<ptrdiff_t> & indices) const
 /* read-only access (but don't change) array elements via indices vector. */
 {
   ptrdiff_t flat = indices[0]*sizeax[dimension-2] + indices[1];
@@ -153,7 +142,7 @@ T& r2cArray<T>::operator()(const std::vector<ptrdiff_t> & indices) const
   for (int d = 1; d < dimension-2; d++)
     flat = flat*sizeax[dimension - 2 - d] + indices[d+1];
 
-  flat *= spacer
+  flat *= spacer;
   flat += indices[dimension-1];
   
   return arr[flat];
@@ -188,7 +177,7 @@ ptrdiff_t r2cArray<T>::flatten_index(const std::vector<ptrdiff_t> &indices) cons
   for (int d = 1; d < dimension-2; d++)
     flat = flat*sizeax[dimension - 2 - d] + indices[d+1];
 
-  flat *= spacer
+  flat *= spacer;
   flat += indices[dimension-1];
   
 
@@ -227,11 +216,5 @@ r2cArray<T>& r2cArray<T>::operator=(r2cArray<T> other)
   
   return *this;
 }
-
-
-
-template class r2cArray<double>;
-template class r2cArray<std::complex<double>>;
-
-// Template below doesn't work because it forces return of double [2] array.
-//template class r2cArray<fftw_complex>; 
+//template class fftwArr::r2cArray<double>;
+//template class fftwArr::r2cArray<std::complex<double>>;

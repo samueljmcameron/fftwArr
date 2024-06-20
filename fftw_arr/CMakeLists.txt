@@ -1,4 +1,4 @@
-file(GLOB LIB_SOURCES array3d.cpp)
+file(GLOB LIB_SOURCES array3d.cpp r2c_2d.cpp r2c_array.cpp)
 
 
 add_library(fftw_arr STATIC ${LIB_SOURCES})
@@ -9,7 +9,7 @@ target_include_directories(fftw_arr PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(fftw_arr PUBLIC MPI::MPI_CXX PkgConfig::FFTW-MPI ${FFTW_ARR_LIB})
 
-set_target_properties(fftw_arr PROPERTIES PUBLIC_HEADER "array3d.hpp" "r2c_array.hpp" "r2c_2d.hpp")
+set_target_properties(fftw_arr PROPERTIES PUBLIC_HEADER "array3d.hpp;r2c_array.hpp;r2c_2d.hpp")
 
 
 include(GNUInstallDirs)

@@ -59,8 +59,6 @@ xs = concatenated[:,0]
 ys = concatenated[:,1]
 zs = concatenated[:,2]
 
-
-
 errors = {} # store errors between expected output and output generated from example calculation
 
 errors['input'] = phi(xs,ys,zs)-concatenated[:,3]
