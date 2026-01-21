@@ -36,6 +36,10 @@ MANIFEST
 *.manifest
 *.spec
 
+
+# pkgconfig
+pkgconfig/
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

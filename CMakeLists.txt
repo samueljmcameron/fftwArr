@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArr VERSION 1.1.1 DESCRIPTION "array interface for fftw3"
+project(fftwArr VERSION 2.0.0 DESCRIPTION "array interface for fftw3"
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -38,4 +38,4 @@ pkg_check_modules(FFTW-MPI IMPORTED_TARGET REQUIRED fftw3mpi)
 
 
 
-add_subdirectory(fftw_arr)
+add_subdirectory(src)
