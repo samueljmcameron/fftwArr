@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <complex>
+#include <memory>
 
 namespace fftwArr {
 
@@ -19,13 +20,14 @@ private:
   ptrdiff_t size;
   int nprocs,me;
 
-  std::array<ptrdiff_t,3> sizeax; // = {Nx,Ny,Nz} 
+  ptrdiff_t global_x_size;        // global size of the Nx (since it is not saved anywhere else)
+  std::array<ptrdiff_t,3> sizeax; // local axis sizes of the array {nx,ny,nz} 
   
   std::string array_name;
   int spacer;
   MPI_Comm world;
 
-
+  std::unique_ptr<fftwArr::array3D<T>> fftw_recv; // for I/O
   std::string operation_err_msg(const std::string &,
 				const std::string &);
   
@@ -40,7 +42,6 @@ public:
   void assign(const MPI_Comm &,std::string,
 	      ptrdiff_t, ptrdiff_t, ptrdiff_t);
 
-  
 
   ~array3D();
 
@@ -75,9 +76,9 @@ public:
   }
 
 
-  ptrdiff_t yzsize() const
-  /* memory size of yz combined, accounting for array being non-contiguous
-     (i.e. NOT just Ny*Nz) */
+  ptrdiff_t xysize() const
+  /* memory size of xy combined, accounting for array being non-contiguous
+     (i.e. NOT just Nx*Ny) */
   {
     return sizeax[1]*spacer;
   }
@@ -128,7 +129,7 @@ public:
   array3D<T>& operator+=(const array3D<T>& rhs);
   array3D<T>& operator-=(const array3D<T>& rhs);
 
-  
+  void write_to_binary();  
   /*
     void abs(array3D<T><double>&) const;
     void mod(array3D<T><double>&) const;
@@ -175,22 +176,22 @@ std::ostream& operator<<(std::ostream& stream,
   MPI_Comm world = rhs.get_world();
   
   if (me == 0)
-    stream << "Proc\tix\tiy\tiz\t" << rhs.get_name() << std::endl;
+    stream << "Proc\tnx\tny\tnz\t" << rhs.get_name() << std::endl;
 
 
   for (int p = 0; p < nprocs; p++) {
     if (p == me) {
       bool firstval = true;
-      for (int i = 0; i < rhs.Nx(); i++)
-	for (int j = 0; j < rhs.Ny(); j++)
-	  for (int k = 0; k < rhs.Nz(); k++)
+      for (int nz = 0; nz < rhs.Nz(); nz++)
+	for (int ny = 0; ny < rhs.Ny(); ny++)
+	  for (int nx = 0; nx < rhs.Nx(); nx++)
 	    if (firstval) {
-	      stream << p << "\t" << i << "\t"
-		     << j << "\t" << k << "\t" << rhs(i,j,k);
+	      stream << p << "\t" << nx << "\t"
+		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
 	      firstval = false;
 	    } else
-	      stream << std::endl << p << "\t" << i << "\t"
-		     << j << "\t" << k << "\t" << rhs(i,j,k);
+	      stream << std::endl << p << "\t" << nx << "\t"
+		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
       
     }
     MPI_Barrier(world);

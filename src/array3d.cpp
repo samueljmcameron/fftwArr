@@ -16,33 +16,33 @@ template <typename T>
 array3D<T>::array3D(const MPI_Comm &comm,std::string name,
 			 ptrdiff_t Nx, ptrdiff_t Ny, ptrdiff_t Nz)
 /*
-  Constructor for a 3D array with axis sizes (Nx,Ny,Nz) (the z dimension
+  Constructor for a 3D array with axis sizes (Nx,Ny,Nz) (the x dimension
   varies the quickest). The array is not contiguous in memory for different
-  y and x indices. Values are all doubles.
+  y and z indices.
 
   The structure (once parallelised will be):
 
-  z
-  |  y
+  y
+  |  x
   | /
   |/
-   ------ x
+   ------ z
   
         _______    _______    _______           _______
        /      /|  /      /|  /      /|         /      /|
-  Ny  /      / | /      / | /      / |        /      / | 
+  Nx  /      / | /      / | /      / |        /      / | 
      /      /  |/      /  |/      /  |       /      /  |
      |      |  ||      |  ||      |  |       |      |  |
      |      |  ||      |  ||      |  |       |      |  |
      |      |  ||      |  ||      |  |  ...  |      |  |
      |      |  ||      |  ||      |  |       |      |  |
- Nz  |      |  ||      |  ||      |  |       |      |  |
+ Ny  |      |  ||      |  ||      |  |       |      |  |
      |      |  ||      |  ||      |  |       |      |  |
      |      |  /|      |  /|      |  /       |      |  /
      |      | / |      | / |      | /        |      | /
      |______|/  |______|/  |______|/         |______|/
 
-       Nx_1       Nx_1       Nx_2       ...    Nx_p
+       Nz_1       Nz_1       Nz_2       ...    Nz_p
 
 
   Parameters
@@ -64,7 +64,9 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
   ptrdiff_t local_n0;
   
   world = comm;
-  alloc_local = fftw_mpi_local_size_3d(Nx, Ny , Nz/2 + 1,
+
+  // pass axes along so that z varies most slowly, then y, then x
+  alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx/2 + 1,
 				       world,&local_n0,&local_0_start);
   
 
@@ -72,18 +74,19 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
   MPI_Comm_rank(world,&me);
 
   
-  sizeax[0] = local_n0;
+  sizeax[2] = local_n0;
   sizeax[1] = Ny;
+  global_x_size = Nx;
 
   if (typeid(T) == typeid(double)) {
-    sizeax[2] = Nz;
+    sizeax[0] = Nx;
     arr = (T*) fftw_alloc_real(2*alloc_local);
-    spacer = 2*(Nz/2+1);    
+    spacer = 2*(Nx/2+1);    
     size = spacer*alloc_local;
   } else if (typeid(T) == typeid(std::complex<double>)) {
-    sizeax[2] = Nz/2+1;
+    sizeax[0] = Nx/2+1;
     arr = (T*) fftw_alloc_complex(alloc_local);
-    spacer=Nz/2+1;
+    spacer=Nx/2+1;
     size = alloc_local;
   } else
     throw std::runtime_error("array3D can only have type double, "
@@ -104,7 +107,7 @@ template <typename T>
 array3D<T>::array3D(const array3D<T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
-    nprocs(base.nprocs),me(base.me),world(base.world)
+    global_x_size(base.global_x_size),nprocs(base.nprocs),me(base.me),world(base.world)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the
@@ -170,24 +173,25 @@ void array3D<T>::assign(const MPI_Comm &comm,std::string name,
   ptrdiff_t local_n0;
   
   world = comm;
-  alloc_local = fftw_mpi_local_size_3d(Nx, Ny , Nz/2 + 1,
+  alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx/2 + 1,
 				       world,&local_n0,&local_0_start);
   
   MPI_Comm_size(world,&nprocs);
   MPI_Comm_rank(world,&me);
   
-  sizeax[0] = local_n0;
+  sizeax[2] = local_n0;
   sizeax[1] = Ny;
+  global_x_size = Nx;
 
   if (typeid(T) == typeid(double)) {
-    sizeax[2] = Nz;
+    sizeax[0] = Nx;
     arr = (T*) fftw_alloc_real(2*alloc_local);
-    spacer = 2*(Nz/2+1);    
+    spacer = 2*(Nx/2+1);    
     size = spacer*alloc_local;
   } else if (typeid(T) == typeid(std::complex<double>)) {
-    sizeax[2] = Nz/2+1;
+    sizeax[0] = Nx/2+1;
     arr = (T*) fftw_alloc_complex(alloc_local);
-    spacer=Nz/2+1;
+    spacer=Nx/2+1;
     size = alloc_local;
   } else
     throw std::runtime_error("array3D can only have type double, "
@@ -207,20 +211,20 @@ array3D<T>::~array3D() {
 
 
 template <typename T>
-T& array3D<T>::operator()(ptrdiff_t i,ptrdiff_t j, ptrdiff_t k)
-/* read/write access array elements via (i,j,k). */
+T& array3D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny, ptrdiff_t nz)
+/* read/write access array elements via (nx,ny,nz). */
 {
 
-  return arr[k + (i*sizeax[1] + j ) * spacer];
+  return arr[nx + (nz*sizeax[1] + ny ) * spacer];
 }
 
 
 
 template <typename T>
-T array3D<T>::operator()(ptrdiff_t i,ptrdiff_t j, ptrdiff_t k) const
-/* read-only access (but don't change) array elements via (i,j,k). */
+T array3D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny, ptrdiff_t nz) const
+/* read-only access (but don't change) array elements via (nx,ny,nz). */
 {
-  return arr[k + (i*sizeax[1] + j ) * spacer];
+  return arr[nx + (nz*sizeax[1] + ny ) * spacer];
 
 }
 
@@ -232,11 +236,11 @@ T& array3D<T>::operator()(ptrdiff_t flat)
 /* read/write access array elements via flattened array. */
 {
 
-  int k = flat % sizeax[2];
-  int j = (flat/sizeax[2]) % sizeax[1];
-  int i = (flat/sizeax[2])/sizeax[1];
+  int nx = flat % sizeax[0];
+  int ny = (flat/sizeax[0]) % sizeax[1];
+  int nz = (flat/sizeax[0])/sizeax[1];
 
-  return arr[k + (i*sizeax[1] + j ) * spacer];
+  return arr[nx + (nz*sizeax[1] + ny ) * spacer];
 }
 
 
@@ -246,11 +250,11 @@ T array3D<T>::operator()(ptrdiff_t flat) const
 /* read-only access (but don't change) array elements via flattened array. */
 {
 
-  int k = flat % sizeax[2];
-  int j = (flat/sizeax[2]) % sizeax[1];
-  int i = (flat/sizeax[2])/sizeax[1];
+  int nx = flat % sizeax[0];
+  int ny = (flat/sizeax[0]) % sizeax[1];
+  int nz = (flat/sizeax[0])/sizeax[1];
 
-  return arr[k + (i*sizeax[1] + j ) * spacer];
+  return arr[nx + (nz*sizeax[1] + ny ) * spacer];
 
 }
 
@@ -268,10 +272,10 @@ array3D<T>& array3D<T>::operator=(array3D<T> other)
 template <typename T>
 array3D<T>& array3D<T>::operator=(T other)
 {
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j) * spacer] = other;
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny) * spacer] = other;
       }
     }
   }
@@ -282,12 +286,12 @@ array3D<T>& array3D<T>::operator=(T other)
 
 
 template <typename T>
-void array3D<T>::reverseFlat(int gridindex, int &i, int &j, int &k) const
+void array3D<T>::reverseFlat(int gridindex, int &nx, int &ny, int &nz) const
 {
 
-  k = gridindex % sizeax[2];
-  j = (gridindex / sizeax[2]) % sizeax[1];
-  i = (gridindex / sizeax[2]) / sizeax[1];
+  nx = gridindex % sizeax[0];
+  ny = (gridindex / sizeax[0]) % sizeax[1];
+  nz = (gridindex / sizeax[0]) / sizeax[1];
 
 }
 
@@ -296,10 +300,10 @@ void array3D<T>::reverseFlat(int gridindex, int &i, int &j, int &k) const
 template <typename T>
 array3D<T>& array3D<T>::operator*=(T rhs)
 {
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] *= rhs;
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] *= rhs;
       }
     }
   }
@@ -310,10 +314,10 @@ array3D<T>& array3D<T>::operator*=(T rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator/=(T rhs)
 {
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] /= rhs;
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] /= rhs;
       }
     }
   }
@@ -323,10 +327,10 @@ array3D<T>& array3D<T>::operator/=(T rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator+=(T rhs)
 {
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] += rhs;
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] += rhs;
       }
     }
   }
@@ -337,10 +341,10 @@ array3D<T>& array3D<T>::operator+=(T rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator-=(T rhs)
 {
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] -= rhs;
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] -= rhs;
       }
     }
   }
@@ -355,10 +359,10 @@ array3D<T>& array3D<T>::operator*=(const array3D<T>& rhs)
       = operation_err_msg(rhs.get_name(),"Element-wise multiplication");
     throw std::runtime_error(errmsg);
   }  
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] *= rhs(i,j,k);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] *= rhs(nx,ny,nz);
       }
     }
   }
@@ -376,10 +380,10 @@ array3D<T>& array3D<T>::operator/=(const array3D<T>& rhs)
     throw std::runtime_error(errmsg.c_str());
   }
   
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] /= rhs(i,j,k);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] /= rhs(nx,ny,nz);
       }
     }
   }
@@ -397,10 +401,10 @@ array3D<T>& array3D<T>::operator+=(const array3D<T>& rhs)
     throw std::runtime_error(errmsg.c_str());
   }
   
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] += rhs(i,j,k);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] += rhs(nx,ny,nz);
       }
     }
   }
@@ -418,14 +422,28 @@ array3D<T>& array3D<T>::operator-=(const array3D<T>& rhs)
     throw std::runtime_error(errmsg.c_str());
   }
   
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j ) * spacer] -= rhs(i,j,k);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] -= rhs(nx,ny,nz);
       }
     }
   }
   return *this;
+}
+
+
+template <typename T>
+void array3D<T>::write_to_binary()
+{
+
+  int recvid, sendid;
+
+  if (!fftw_recv)
+    fftw_recv = std::make_unique<array3D<T>>(world,array_name+std::string("_neighborplane"),
+					     global_x_size,sizeax[1],nprocs);
+      
+
 }
 
 
@@ -458,10 +476,10 @@ void array3D<T>::abs(array3D& modulus) const
 
 
 
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	modulus(i,j,k) = std::abs(arr[k + (i*sizeax[1] + j ) * spacer]);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	modulus(nx,ny,nz) = std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
       }
     }
   }
@@ -480,11 +498,11 @@ void array3D<T>::modSq(array3D& modulus) const
 
 
 
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	modulus(i,j,k) = std::abs(arr[k + (i*sizeax[1] + j ) * spacer])
-	  *std::abs(arr[k + (i*sizeax[1] + j ) * spacer]);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	modulus(nx,ny,nz) = std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer])
+	  *std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
       }
     }
   }
@@ -502,11 +520,11 @@ void array3D<T>::running_modSq(array3D& modulus) const
     throw std::runtime_error("Cannot take abs of array3D (wrong output shape).");
 
 
-  for (int i = 0; i < sizeax[0]; i++) {
-    for (int j = 0; j < sizeax[1]; j++) {
-      for (int k = 0; k < sizeax[2]; k++) {
-	modulus(i,j,k) += std::abs(arr[k + (i*sizeax[1] + j ) * spacer])
-	  *std::abs(arr[k + (i*sizeax[1] + j ) * spacer]);
+  for (int nz = 0; nz < sizeax[2]; nz++) {
+    for (int ny = 0; ny < sizeax[1]; ny++) {
+      for (int nx = 0; nx < sizeax[0]; nx++) {
+	modulus(nx,ny,nz) += std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer])
+	  *std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
       }
     }
   }

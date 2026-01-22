@@ -40,8 +40,8 @@ template <typename T>
 void test_function(MPI_Comm world)
 {
   int Nx = 20;
-  int Ny = 2;
-  int Nz = 3;
+  int Ny = 7;
+  int Nz = 13;
 
   // define the array to be transform, phi(x,y,z), in both real and fourier space
   fftwArr::array3D<T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,Nz);
