@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArrExample VERSION 1.0 DESCRIPTION "example on how to use fftwArr with fftw3"
+project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing binary operations."
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -47,9 +47,9 @@ pkg_check_modules(FFTWARR IMPORTED_TARGET REQUIRED fftw_arr)
 MESSAGE(STATUS "FFTWARR_LIBRARIES::" ${FFTWARR_LIBRARIES})
 
 
-add_executable(basic-real_array_3d main.cpp)
+add_executable(test-binary_operations main.cpp)
 
-target_link_libraries(basic-real_array_3d PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
+target_link_libraries(test-binary_operations PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})

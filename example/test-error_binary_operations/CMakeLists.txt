@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArrExample VERSION 1.0 DESCRIPTION "example on how to use fftwArr with fftw3"
+project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing binary operations errors from size mismatch."
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -25,16 +25,31 @@ set(PKG_CHECK_MODULES_STATIC)
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-pkg_check_modules(FFTW-MPI IMPORTED_TARGET QUIET fftw3mpi)
-if (NOT FFTW-MPI_FOUND)
-  message(FATAL_ERROR "Need to specify where to find fftw_arr in CMAKE_PREFIX_PATH")
-endif()
 
+MESSAGE(STATUS "CMAKE_PREFIX_PATH:" ${CMAKE_PREFIX_PATH})
+MESSAGE(STATUS "CMAKE_FRAMEWORK_PATH:" ${CMAKE_FRAMEWORK_PATH})
+MESSAGE(STATUS "CMAKE_APPBUNDLE_PATH:" ${CMAKE_APPBUNDLE_PATH})
+
+pkg_check_modules(FFTW-MPI IMPORTED_TARGET fftw3mpi)
+if (NOT FFTW-MPI_FOUND)
+  message(FATAL_ERROR "Need to specify where to find fftw3_mpi in CMAKE_PREFIX_PATH")
+endif()
+MESSAGE(STATUS "FFTW-MPI_LIBRARIES::" ${FFTW-MPI_LIBRARIES})
+
+
+
+
+MESSAGE(STATUS "CMAKE_PREFIX_PATH:" ${CMAKE_PREFIX_PATH})
+MESSAGE(STATUS "CMAKE_FRAMEWORK_PATH:" ${CMAKE_FRAMEWORK_PATH})
+MESSAGE(STATUS "CMAKE_APPBUNDLE_PATH:" ${CMAKE_APPBUNDLE_PATH})
 pkg_check_modules(FFTWARR IMPORTED_TARGET REQUIRED fftw_arr)
 
-add_executable(sinewave-bin main.cpp)
+MESSAGE(STATUS "FFTWARR_LIBRARIES::" ${FFTWARR_LIBRARIES})
 
-target_link_libraries(sinewave-bin PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
+
+add_executable(test-error_binary_operations main.cpp)
+
+target_link_libraries(test-error_binary_operations PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})

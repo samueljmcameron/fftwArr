@@ -24,6 +24,10 @@ private:
   std::string array_name;
   int spacer;
   MPI_Comm world;
+
+
+  std::string operation_err_msg(const std::string &,
+				const std::string &);
   
 public:
 
@@ -107,8 +111,9 @@ public:
   T& operator()(ptrdiff_t );
   T operator()(ptrdiff_t ) const;
 
+
+  array3D<T>& operator=(T other);
   array3D<T>& operator=(array3D<T> other);
-  void setZero();
 
   void reverseFlat(int,  int &, int &, int &) const;
 
@@ -123,6 +128,7 @@ public:
   array3D<T>& operator+=(const array3D<T>& rhs);
   array3D<T>& operator-=(const array3D<T>& rhs);
 
+  
   /*
     void abs(array3D<T><double>&) const;
     void mod(array3D<T><double>&) const;
@@ -149,41 +155,49 @@ public:
     return;
 
   }
+  
+  
+};
 
 
-  friend std::ostream& operator<<(std::ostream& stream,
-				  const array3D<T>& rhs)
-  {
-    int nprocs = rhs.nprocs;
-    int me = rhs.me;
-    MPI_Comm world = rhs.world;
 
-    if (me == 0)
-      std::cout << "Proc\tIndex\t" << rhs.get_name() << std::endl;
 
-    for (int p = 0; p < nprocs; p++) {
-      if (p == me) {
-	
-	for (int i = 0; i < rhs.Nx(); i++)
-	  for (int j = 0; j < rhs.Ny(); j++)
-	    for (int k = 0; k < rhs.Nz(); k++)
-	      std::cout << p << "\t" << "(" << i << "," << j << ","
-			<< k << ")\t" << rhs(i,j,k) << std::endl;
-      }
-      MPI_Barrier(world);
+};
+
+
+template <typename T>
+std::ostream& operator<<(std::ostream& stream,
+			 const fftwArr::array3D<T>& rhs)
+{
+
+  int nprocs = rhs.get_nprocs();
+  int me = rhs.get_me();
+  MPI_Comm world = rhs.get_world();
+  
+  if (me == 0)
+    stream << "Proc\tix\tiy\tiz\t" << rhs.get_name() << std::endl;
+
+
+  for (int p = 0; p < nprocs; p++) {
+    if (p == me) {
+      bool firstval = true;
+      for (int i = 0; i < rhs.Nx(); i++)
+	for (int j = 0; j < rhs.Ny(); j++)
+	  for (int k = 0; k < rhs.Nz(); k++)
+	    if (firstval) {
+	      stream << p << "\t" << i << "\t"
+		     << j << "\t" << k << "\t" << rhs(i,j,k);
+	      firstval = false;
+	    } else
+	      stream << std::endl << p << "\t" << i << "\t"
+		     << j << "\t" << k << "\t" << rhs(i,j,k);
       
     }
-    
+    MPI_Barrier(world);
     
   }
   
-  
-  
-};
-
-
-
-
-};
+  return stream;
+}
 
 #endif

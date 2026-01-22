@@ -91,7 +91,9 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
   
     
   array_name = name;
-  setZero();  
+
+  // the next line sets all elements of the array equal to zero
+  *this = 0;
 };
 
 
@@ -263,21 +265,21 @@ array3D<T>& array3D<T>::operator=(array3D<T> other)
 }
 
 
-
 template <typename T>
-void array3D<T>::setZero()
+array3D<T>& array3D<T>::operator=(T other)
 {
-
   for (int i = 0; i < sizeax[0]; i++) {
     for (int j = 0; j < sizeax[1]; j++) {
       for (int k = 0; k < sizeax[2]; k++) {
-	arr[k + (i*sizeax[1] + j) * spacer] = 0.0;
+	arr[k + (i*sizeax[1] + j) * spacer] = other;
       }
     }
   }
-  return;
-
+  return *this;
 }
+
+
+
 
 template <typename T>
 void array3D<T>::reverseFlat(int gridindex, int &i, int &j, int &k) const
@@ -288,6 +290,8 @@ void array3D<T>::reverseFlat(int gridindex, int &i, int &j, int &k) const
   i = (gridindex / sizeax[2]) / sizeax[1];
 
 }
+
+
 
 template <typename T>
 array3D<T>& array3D<T>::operator*=(T rhs)
@@ -343,10 +347,14 @@ array3D<T>& array3D<T>::operator-=(T rhs)
   return *this;
 }
 
-
 template <typename T>
 array3D<T>& array3D<T>::operator*=(const array3D<T>& rhs)
 {
+  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+    std::string errmsg
+      = operation_err_msg(rhs.get_name(),"Element-wise multiplication");
+    throw std::runtime_error(errmsg);
+  }  
   for (int i = 0; i < sizeax[0]; i++) {
     for (int j = 0; j < sizeax[1]; j++) {
       for (int k = 0; k < sizeax[2]; k++) {
@@ -361,6 +369,13 @@ array3D<T>& array3D<T>::operator*=(const array3D<T>& rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator/=(const array3D<T>& rhs)
 {
+
+  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+    std::string errmsg
+      = operation_err_msg(rhs.get_name(),"Element-wise division");
+    throw std::runtime_error(errmsg.c_str());
+  }
+  
   for (int i = 0; i < sizeax[0]; i++) {
     for (int j = 0; j < sizeax[1]; j++) {
       for (int k = 0; k < sizeax[2]; k++) {
@@ -375,6 +390,13 @@ array3D<T>& array3D<T>::operator/=(const array3D<T>& rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator+=(const array3D<T>& rhs)
 {
+
+  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+    std::string errmsg
+      = operation_err_msg(rhs.get_name(),"Element-wise addition");
+    throw std::runtime_error(errmsg.c_str());
+  }
+  
   for (int i = 0; i < sizeax[0]; i++) {
     for (int j = 0; j < sizeax[1]; j++) {
       for (int k = 0; k < sizeax[2]; k++) {
@@ -389,6 +411,13 @@ array3D<T>& array3D<T>::operator+=(const array3D<T>& rhs)
 template <typename T>
 array3D<T>& array3D<T>::operator-=(const array3D<T>& rhs)
 {
+
+  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+    std::string errmsg
+      = operation_err_msg(rhs.get_name(),"Element-wise subtraction");
+    throw std::runtime_error(errmsg.c_str());
+  }
+  
   for (int i = 0; i < sizeax[0]; i++) {
     for (int j = 0; j < sizeax[1]; j++) {
       for (int k = 0; k < sizeax[2]; k++) {
@@ -398,6 +427,21 @@ array3D<T>& array3D<T>::operator-=(const array3D<T>& rhs)
   }
   return *this;
 }
+
+
+template <typename T>
+std::string array3D<T>::operation_err_msg(const std::string & othername,
+					  const std::string & operation)
+{
+    std::string errmsg;
+    errmsg = operation + std::string(" of fftwArrs failed: ");
+    errmsg += array_name + std::string(" and ") + othername;
+    errmsg += std::string(" cannot be broadcast (sizes don't match).");
+
+    return errmsg;
+
+}
+
 
 
 template class fftwArr::array3D<double>;
