@@ -7,6 +7,7 @@
 #include <iostream>
 #include <complex>
 #include <memory>
+#include <fstream>
 
 namespace fftwArr {
 
@@ -129,7 +130,14 @@ public:
   array3D<T>& operator+=(const array3D<T>& rhs);
   array3D<T>& operator-=(const array3D<T>& rhs);
 
-  void write_to_binary();  
+  void write_to_binary(std::fstream &,
+		       const bool overlap=true);
+
+
+  void read_from_binary(std::fstream &,
+			const bool overlap=true);
+
+  
   /*
     void abs(array3D<T><double>&) const;
     void mod(array3D<T><double>&) const;
