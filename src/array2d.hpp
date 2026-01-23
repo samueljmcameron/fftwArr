@@ -1,5 +1,5 @@
-#ifndef FFTWMPI_ARRAY3D_HPP
-#define FFTWMPI_ARRAY3D_HPP
+#ifndef FFTWMPI_ARRAY2D_HPP
+#define FFTWMPI_ARRAY2D_HPP
 
 #include <fftw3-mpi.h>
 #include <array>
@@ -12,7 +12,7 @@
 namespace fftwArr {
 
 template <typename T>
-class array3D
+class array2D
 {
 
   friend class Conjugate;
@@ -24,29 +24,29 @@ private:
   int nprocs,me;
 
   ptrdiff_t global_x_size;        // global size of the Nx (since it is not saved anywhere else)
-  std::array<ptrdiff_t,3> sizeax; // local axis sizes of the array {nx,ny,nz} 
+  std::array<ptrdiff_t,2> sizeax; // local axis sizes of the array {nx,ny,nz} 
   
   std::string array_name;
   int spacer;
   MPI_Comm world;
 
-  std::unique_ptr<fftwArr::array3D<T>> fftw_recv; // for I/O
+  std::unique_ptr<fftwArr::array2D<T>> fftw_recv; // for I/O
   std::string operation_err_msg(const std::string &,
 				const std::string &);
   
 public:
 
-  array3D();
-  array3D(const MPI_Comm &,std::string,
-	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
-  array3D(const array3D<T> &,std::string name = "");
+  array2D();
+  array2D(const MPI_Comm &,std::string,
+	  ptrdiff_t, ptrdiff_t);
+  array2D(const array2D<T> &,std::string name = "");
 
 
   void assign(const MPI_Comm &,std::string,
-	      ptrdiff_t, ptrdiff_t, ptrdiff_t);
+	      ptrdiff_t, ptrdiff_t);
 
 
-  ~array3D();
+  ~array2D();
 
   
   T* data() {
@@ -73,17 +73,12 @@ public:
     return sizeax[1];
   }
 
-  ptrdiff_t Nz() const
-  {
-    return sizeax[2];
-  }
 
-
-  ptrdiff_t xysize() const
-  /* memory size of xy combined, accounting for array being non-contiguous
-     (i.e. NOT just Nx*Ny) */
+  ptrdiff_t xsize() const
+  /* memory size of x, accounting for array being non-contiguous
+     (i.e. NOT just Nx) */
   {
-    return sizeax[1]*spacer;
+    return spacer;
   }
   
 
@@ -109,28 +104,28 @@ public:
   }
   
 
-  T& operator()(ptrdiff_t , ptrdiff_t , ptrdiff_t );
-  T operator()(ptrdiff_t , ptrdiff_t , ptrdiff_t ) const;
+  T& operator()(ptrdiff_t , ptrdiff_t );
+  T operator()(ptrdiff_t , ptrdiff_t ) const;
 
   T& operator()(ptrdiff_t );
   T operator()(ptrdiff_t ) const;
 
 
-  array3D<T>& operator=(T other);
-  array3D<T>& operator=(array3D<T> other);
+  array2D<T>& operator=(T other);
+  array2D<T>& operator=(array2D<T> other);
 
-  void reverseFlat(int,  int &, int &, int &) const;
+  void reverseFlat(int,  int &, int &) const;
 
 
-  array3D<T>& operator*=(T rhs);
-  array3D<T>& operator/=(T rhs);
-  array3D<T>& operator+=(T rhs);
-  array3D<T>& operator-=(T rhs);
+  array2D<T>& operator*=(T rhs);
+  array2D<T>& operator/=(T rhs);
+  array2D<T>& operator+=(T rhs);
+  array2D<T>& operator-=(T rhs);
   
-  array3D<T>& operator*=(const array3D<T>& rhs);
-  array3D<T>& operator/=(const array3D<T>& rhs);
-  array3D<T>& operator+=(const array3D<T>& rhs);
-  array3D<T>& operator-=(const array3D<T>& rhs);
+  array2D<T>& operator*=(const array2D<T>& rhs);
+  array2D<T>& operator/=(const array2D<T>& rhs);
+  array2D<T>& operator+=(const array2D<T>& rhs);
+  array2D<T>& operator-=(const array2D<T>& rhs);
 
   void write_to_binary(std::fstream &,
 		       const bool overlap=true);
@@ -141,14 +136,14 @@ public:
 
   
   /*
-    void abs(array3D<T><double>&) const;
-    void mod(array3D<T><double>&) const;
-    void running_mod(array3D<T><double>&) const;
+    void abs(array2D<T><double>&) const;
+    void mod(array2D<T><double>&) const;
+    void running_mod(array2D<T><double>&) const;
   */
 
 
 
-  friend void swap(array3D<T>& first, array3D<T>& second)
+  friend void swap(array2D<T>& first, array2D<T>& second)
   {
     using std::swap;
 
@@ -178,7 +173,7 @@ public:
 
 template <typename T>
 std::ostream& operator<<(std::ostream& stream,
-			 const fftwArr::array3D<T>& rhs)
+			 const fftwArr::array2D<T>& rhs)
 {
 
   int nprocs = rhs.get_nprocs();
@@ -186,22 +181,21 @@ std::ostream& operator<<(std::ostream& stream,
   MPI_Comm world = rhs.get_world();
   
   if (me == 0)
-    stream << "Proc\tnx\tny\tnz\t" << rhs.get_name() << std::endl;
+    stream << "Proc\tnx\tny\t" << rhs.get_name() << std::endl;
 
 
   for (int p = 0; p < nprocs; p++) {
     if (p == me) {
       bool firstval = true;
-      for (int nz = 0; nz < rhs.Nz(); nz++)
-	for (int ny = 0; ny < rhs.Ny(); ny++)
-	  for (int nx = 0; nx < rhs.Nx(); nx++)
-	    if (firstval) {
-	      stream << p << "\t" << nx << "\t"
-		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
-	      firstval = false;
-	    } else
-	      stream << std::endl << p << "\t" << nx << "\t"
-		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
+      for (int ny = 0; ny < rhs.Ny(); ny++)
+	for (int nx = 0; nx < rhs.Nx(); nx++)
+	  if (firstval) {
+	    stream << p << "\t" << nx << "\t"
+		   << ny << "\t" << rhs(nx,ny);
+	    firstval = false;
+	  } else
+	    stream << std::endl << p << "\t" << nx << "\t"
+		   << ny << "\t" << rhs(nx,ny);
       
     }
     MPI_Barrier(world);

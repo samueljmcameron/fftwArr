@@ -2,10 +2,11 @@
 #include <iostream>
 #include <tuple>
 #include <complex>
+#include "fftw_arr/array2d.hpp"
 #include "fftw_arr/array3d.hpp"
 
 template <typename T>
-void test_function(MPI_Comm world);
+void test_function(MPI_Comm ,int );
 
 int main()
 {
@@ -26,12 +27,14 @@ int main()
   // first, define a tuple with all the types you want to iterate over
   std::tuple<double,std::complex<double>> types;
 
-  // std::apply invokes the lambda function with elements of type as arguments
-  
-  // NOTE: can't use && as that just provides a reference to the tuple elements,
-  // which would make e.g. decltype(std::get<0>(types)) return &double instead of
-  // double
-  std::apply([=](auto... args){((test_function<decltype(args)>(world)),...);},types);  
+
+  for (int dim = 2; dim <=3 ; dim ++)
+    // std::apply invokes the lambda function with elements of type as arguments
+    
+    // NOTE: can't use && as that just provides a reference to the tuple elements,
+    // which would make e.g. decltype(std::get<0>(types)) return &double instead of
+    // double
+    std::apply([=](auto... args){((test_function<decltype(args)>(world,dim)),...);},types);  
 
 
   //test_function<double>(world);
@@ -52,30 +55,54 @@ int main()
 }
 
 template <typename T>
-void test_function(MPI_Comm world)
+void test_function(MPI_Comm world,int dim)
 {
-  int Nx = 3;
-  int Ny = 2;
-  int Nz = 10;
-
-  
-  // define the array to be transform, phi(x,y,z), in both real and fourier space
-  fftwArr::array3D<T> phi_1(world,"phi_1",Nx,Ny,Nz);
 
 
-
-  for (int nz = 0; nz < phi_1.Nz(); nz++)
+  if (dim == 2) {
+    
+    
+    int Nx = 3;
+    int Ny = 9;
+    
+    
+    // define the array to be transform, phi(x,y,z), in both real and fourier space
+    fftwArr::array2D<T> phi_1(world,"phi_1",Nx,Ny);
+    
+    
+    
     for (int ny = 0; ny < phi_1.Ny(); ny++)
       for (int nx = 0; nx < phi_1.Nx(); nx++)
-  	phi_1(nx,ny,nz) = nx+ny+nz + 0.4;
-
-
-
-  std::cout << phi_1 << std::endl;
-
-  if (phi_1.get_me() == 0)
-    std::cout << "\nTesting for fftwArr of type " << typeid(T).name()
-	      << " was succesful.\n" << std::endl;
+	phi_1(nx,ny) = nx+ny + 0.4;
+    
+    std::cout << phi_1 << std::endl;
+    
+    if (phi_1.get_me() == 0)
+      std::cout << "\nTesting for 2D fftwArr of type " << typeid(T).name()
+		<< " was succesful.\n" << std::endl;
+  } else if (dim == 3) {
   
+    int Nx = 3;
+    int Ny = 2;
+    int Nz = 10;
+    
+    // define the array to be transform, phi(x,y,z), in both real and fourier space
+    fftwArr::array3D<T> phi_1(world,"phi_1",Nx,Ny,Nz);
+    
+    
+    
+    for (int nz = 0; nz < phi_1.Nz(); nz++)
+      for (int ny = 0; ny < phi_1.Ny(); ny++)
+	for (int nx = 0; nx < phi_1.Nx(); nx++)
+	  phi_1(nx,ny,nz) = nx+ny+nz + 0.4;
+    
+    
+    
+    std::cout << phi_1 << std::endl;
+    
+    if (phi_1.get_me() == 0)
+      std::cout << "\nTesting for 3D fftwArr of type " << typeid(T).name()
+		<< " was succesful.\n" << std::endl;
+  }
   
 }

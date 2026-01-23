@@ -47,6 +47,53 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
        Nz_1       Nz_1       Nz_2       ...    Nz_p
 
 
+
+
+  GLOBALLY, the real array (in the complex to real case) has
+  size
+
+      Nx x Ny x Nz
+
+  (though the space held in memory replaces Nx with 2(Nx/2+1)
+  by design of FFTW3 transforms).
+
+
+  
+       
+  GLOBALLY, the complex array (in the complex to real case) has
+  size
+
+      (Nx/2+1) x Ny x Nz
+
+  and the array storage due to FFTW3 is such that the indices
+
+      0,1,...,Nx/2
+
+  represent qx >= 0, and similarly for y and z. However,
+  for y and z there are also indices
+
+      Ny/2+1,Ny/2+2,...Ny-1
+      Nz/2+1,Nz/2+2,...Nz-1
+
+  and these indices map to the qy and qz values
+
+      ny -> 2*pi*(Ny-ny)/Ly
+      nz -> 2*pi*(Nz-nz)/Ly
+      
+  for ny > Ny/2 and nz > Nz/2. Locally, the local_nz
+  index is determined by
+
+      local_nz = local_0_start - nz
+
+  where nz is the global nz index. Note that FFTW3 library also
+  has an option where the complex array has the final two
+  indices swapped relative to the real array which speeds up
+  computations (passing FFTW_TRANSFORM flags). In this case
+  one would want to ensure that they swap the order in which they
+  pass the Ny and Nz indices in creating a std::complex<double>
+  instance of this class.
+
+       
   Parameters
   ----------
   comm : mpi communicator
@@ -79,6 +126,21 @@ array3D<T>::array3D(const MPI_Comm &comm,std::string name,
   sizeax[2] = local_n0;
   sizeax[1] = Ny;
   global_x_size = Nx;
+
+
+  int processor_used = 1;
+  if (sizeax[2] == 0)
+    processor_used = 0;
+
+  int global_procs;
+
+  MPI_Allreduce(&processor_used, &global_procs, 1, MPI_INT, MPI_SUM, world);
+
+  if (global_procs != nprocs)
+    throw std::runtime_error("Only " + std::to_string(global_procs)
+			     + " out of " + std::to_string(nprocs)
+			     + " processors have fftwArr data stored.");
+  
 
   if (typeid(T) == typeid(double)) {
     sizeax[0] = Nx;
@@ -168,6 +230,12 @@ void array3D<T>::assign(const MPI_Comm &comm,std::string name,
       Typically MPI_COMM_WORLD, but could be other I suppose.
   name : string
       The name of the array (useful when needing to save data).
+  Nx : ptrdiff_t
+      The (global) number of points in the x direction
+  Ny : ptrdiff_t
+      The (global) number of points in the y direction
+  Nz : ptrdiff_t
+      The (global) number of points in the z direction
       
       
 */
@@ -277,7 +345,7 @@ array3D<T>& array3D<T>::operator=(T other)
   for (int nz = 0; nz < sizeax[2]; nz++) {
     for (int ny = 0; ny < sizeax[1]; ny++) {
       for (int nx = 0; nx < sizeax[0]; nx++) {
-	arr[nx + (nz*sizeax[1] + ny) * spacer] = other;
+	arr[nx + (nz*sizeax[1] + ny ) * spacer] = other;
       }
     }
   }
@@ -503,8 +571,8 @@ void array3D<T>::write_to_binary(std::fstream &myfile,
 
     if (me != 0)
 
-      for (int j = 0; j < fftw_recv->Ny(); j++)
-	myfile.write((char*)&(*fftw_recv)(0,j,0),
+      for (int ny = 0; ny < fftw_recv->Ny(); ny++)
+	myfile.write((char*)&(*fftw_recv)(0,ny,0),
 		     sizeof(T)*fftw_recv->Nx());
 
   }
