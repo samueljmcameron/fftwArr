@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing ostream capabilities."
+project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing file_output capabilities."
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -46,10 +46,15 @@ pkg_check_modules(FFTWARR IMPORTED_TARGET REQUIRED fftw_arr)
 
 MESSAGE(STATUS "FFTWARR_LIBRARIES::" ${FFTWARR_LIBRARIES})
 
+pkg_check_modules(FFTWARRTESTINGUTILS IMPORTED_TARGET REQUIRED fftw_arr_testing_utils)
 
-add_executable(test-ostream main.cpp)
+MESSAGE(STATUS "FFTWARRTESTINGUTILS_LIBRARIES::" ${FFTWARRTESTINGUTILS_LIBRARIES})
 
-target_link_libraries(test-ostream PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR)
+
+
+add_executable(test-file_output main.cpp)
+
+target_link_libraries(test-file_output PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})

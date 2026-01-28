@@ -9,13 +9,16 @@
 #include <memory>
 #include <fstream>
 
+#include "fftw_arr.hpp"
+
 namespace fftwArr {
 
-template <typename T>
+  
+template < enum Transform rOc,typename T>
 class array3D
 {
 
-  friend class Conjugate;
+
 private:
   T *arr;
   ptrdiff_t alloc_local, local_0_start;
@@ -30,23 +33,21 @@ private:
   int spacer;
   MPI_Comm world;
 
-  std::unique_ptr<fftwArr::array3D<T>> fftw_recv; // for I/O
+  std::unique_ptr<fftwArr::array3D<rOc,T>> fftw_recv; // for I/O
   std::string operation_err_msg(const std::string &,
 				const std::string &);
+
   
 public:
 
   array3D();
   array3D(const MPI_Comm &,std::string,
 	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
-  array3D(const array3D<T> &,std::string name = "");
-
-
-  void assign(const MPI_Comm &,std::string,
-	      ptrdiff_t, ptrdiff_t, ptrdiff_t);
+  array3D(const array3D<rOc,T> &,std::string name = "");
 
 
   ~array3D();
+
 
   
   T* data() {
@@ -116,21 +117,21 @@ public:
   T operator()(ptrdiff_t ) const;
 
 
-  array3D<T>& operator=(T other);
-  array3D<T>& operator=(array3D<T> other);
+  array3D<rOc,T>& operator=(T other);
+  array3D<rOc,T>& operator=(array3D<rOc,T> other);
 
   void reverseFlat(int,  int &, int &, int &) const;
 
 
-  array3D<T>& operator*=(T rhs);
-  array3D<T>& operator/=(T rhs);
-  array3D<T>& operator+=(T rhs);
-  array3D<T>& operator-=(T rhs);
+  array3D<rOc,T>& operator*=(T rhs);
+  array3D<rOc,T>& operator/=(T rhs);
+  array3D<rOc,T>& operator+=(T rhs);
+  array3D<rOc,T>& operator-=(T rhs);
   
-  array3D<T>& operator*=(const array3D<T>& rhs);
-  array3D<T>& operator/=(const array3D<T>& rhs);
-  array3D<T>& operator+=(const array3D<T>& rhs);
-  array3D<T>& operator-=(const array3D<T>& rhs);
+  array3D<rOc,T>& operator*=(const array3D<rOc,T>& rhs);
+  array3D<rOc,T>& operator/=(const array3D<rOc,T>& rhs);
+  array3D<rOc,T>& operator+=(const array3D<rOc,T>& rhs);
+  array3D<rOc,T>& operator-=(const array3D<rOc,T>& rhs);
 
   void write_to_binary(std::fstream &,
 		       const bool overlap=true);
@@ -141,14 +142,14 @@ public:
 
   
   /*
-    void abs(array3D<T><double>&) const;
-    void mod(array3D<T><double>&) const;
-    void running_mod(array3D<T><double>&) const;
+    void abs(array3D<rOc,T><double>&) const;
+    void mod(array3D<rOc,T><double>&) const;
+    void running_mod(array3D<rOc,T><double>&) const;
   */
 
 
 
-  friend void swap(array3D<T>& first, array3D<T>& second)
+  friend void swap(array3D<rOc,T>& first, array3D<rOc,T>& second)
   {
     using std::swap;
 
@@ -176,9 +177,9 @@ public:
 };
 
 
-template <typename T>
+template < enum fftwArr::Transform rOc, typename T>
 std::ostream& operator<<(std::ostream& stream,
-			 const fftwArr::array3D<T>& rhs)
+			 const fftwArr::array3D<rOc,T>& rhs)
 {
 
   int nprocs = rhs.get_nprocs();

@@ -9,13 +9,15 @@
 #include <memory>
 #include <fstream>
 
+#include "fftw_arr.hpp"
+
 namespace fftwArr {
 
-template <typename T>
+template < enum Transform rOc,typename T>
 class array2D
 {
 
-  friend class Conjugate;
+
 private:
   T *arr;
   ptrdiff_t alloc_local, local_0_start;
@@ -30,7 +32,7 @@ private:
   int spacer;
   MPI_Comm world;
 
-  std::unique_ptr<fftwArr::array2D<T>> fftw_recv; // for I/O
+  std::unique_ptr<fftwArr::array2D<rOc,T>> fftw_recv; // for I/O
   std::string operation_err_msg(const std::string &,
 				const std::string &);
   
@@ -39,7 +41,7 @@ public:
   array2D();
   array2D(const MPI_Comm &,std::string,
 	  ptrdiff_t, ptrdiff_t);
-  array2D(const array2D<T> &,std::string name = "");
+  array2D(const array2D<rOc,T> &,std::string name = "");
 
 
   void assign(const MPI_Comm &,std::string,
@@ -111,21 +113,21 @@ public:
   T operator()(ptrdiff_t ) const;
 
 
-  array2D<T>& operator=(T other);
-  array2D<T>& operator=(array2D<T> other);
+  array2D<rOc,T>& operator=(T other);
+  array2D<rOc,T>& operator=(array2D<rOc,T> other);
 
   void reverseFlat(int,  int &, int &) const;
 
 
-  array2D<T>& operator*=(T rhs);
-  array2D<T>& operator/=(T rhs);
-  array2D<T>& operator+=(T rhs);
-  array2D<T>& operator-=(T rhs);
+  array2D<rOc,T>& operator*=(T rhs);
+  array2D<rOc,T>& operator/=(T rhs);
+  array2D<rOc,T>& operator+=(T rhs);
+  array2D<rOc,T>& operator-=(T rhs);
   
-  array2D<T>& operator*=(const array2D<T>& rhs);
-  array2D<T>& operator/=(const array2D<T>& rhs);
-  array2D<T>& operator+=(const array2D<T>& rhs);
-  array2D<T>& operator-=(const array2D<T>& rhs);
+  array2D<rOc,T>& operator*=(const array2D<rOc,T>& rhs);
+  array2D<rOc,T>& operator/=(const array2D<rOc,T>& rhs);
+  array2D<rOc,T>& operator+=(const array2D<rOc,T>& rhs);
+  array2D<rOc,T>& operator-=(const array2D<rOc,T>& rhs);
 
   void write_to_binary(std::fstream &,
 		       const bool overlap=true);
@@ -136,14 +138,14 @@ public:
 
   
   /*
-    void abs(array2D<T><double>&) const;
-    void mod(array2D<T><double>&) const;
-    void running_mod(array2D<T><double>&) const;
+    void abs(array2D<rOc,T><double>&) const;
+    void mod(array2D<rOc,T><double>&) const;
+    void running_mod(array2D<rOc,T><double>&) const;
   */
 
 
 
-  friend void swap(array2D<T>& first, array2D<T>& second)
+  friend void swap(array2D<rOc,T>& first, array2D<rOc,T>& second)
   {
     using std::swap;
 
@@ -171,9 +173,9 @@ public:
 };
 
 
-template <typename T>
+template < enum fftwArr::Transform rOc, typename T>
 std::ostream& operator<<(std::ostream& stream,
-			 const fftwArr::array2D<T>& rhs)
+			 const fftwArr::array2D<rOc,T>& rhs)
 {
 
   int nprocs = rhs.get_nprocs();

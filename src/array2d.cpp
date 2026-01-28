@@ -2,8 +2,8 @@
 
 using namespace fftwArr;
 
-template <typename T>
-array2D<T>::array2D()
+template < enum Transform rOc,typename T>
+array2D<rOc,T>::array2D()
 /*
   Default constructor (does nothing).
 */
@@ -12,8 +12,8 @@ array2D<T>::array2D()
 };
 
 
-template <typename T>
-array2D<T>::array2D(const MPI_Comm &comm,std::string name,
+template < enum Transform rOc,typename T>
+array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
 			 ptrdiff_t Nx, ptrdiff_t Ny)
 /*
   Constructor for a 2D array with axis sizes (Nx,Ny) (the x dimension
@@ -45,6 +45,18 @@ array2D<T>::array2D(const MPI_Comm &comm,std::string name,
 
 
 
+------------------------------------------------------------
+  
+  GLOBALLY, the array (in the complex to complex case) has
+  size
+
+      Nx x Ny
+
+  which is contigous in memory. The same ordering of how
+  indices line up with q space as mentioned below applies.
+
+
+------------------------------------------------------------
 
   GLOBALLY, the real array (in the complex to real case) has
   size
@@ -54,7 +66,8 @@ array2D<T>::array2D(const MPI_Comm &comm,std::string name,
   (though the space held in memory replaces Nx with 2(Nx/2+1)
   by design of FFTW3 transforms).
 
-
+  
+------------------------------------------------------------
   GLOBALLY, the complex array (in the complex to real case) has
   size
 
@@ -78,15 +91,19 @@ array2D<T>::array2D(const MPI_Comm &comm,std::string name,
 
       local_ny = local_0_start - ny
 
-  where ny is the global ny index. Note that FFTW3 library also
-  has an option where the complex array has the final two
-  indices swapped relative to the real array which speeds up
-  computations (passing FFTW_TRANSFORM flags). In this case
-  one would want to ensure that they swap the order in which they
-  pass the Nx and Ny indices in creating a std::complex<double>
+  where ny is the global ny index.
+
+
+------------------------------------------------------------
+  Note that FFTW3 library also has an option where the
+  complex array has the final two indices swapped relative
+  to the real array which speeds up computations (passing
+  FFTW_TRANSFORM flags). In this case one would want to
+  ensure that they swap the order in which they pass the Nx
+  and Ny indices in creating a std::complex<double>
   instance of this class.
 
-       
+  
   Parameters
   ----------
   comm : mpi communicator
@@ -105,50 +122,69 @@ array2D<T>::array2D(const MPI_Comm &comm,std::string name,
   
   world = comm;
 
-  // pass axes along so that z varies most slowly, then y, then x
-  alloc_local = fftw_mpi_local_size_2d(Ny , Nx/2 + 1,
-				       world,&local_n0,&local_0_start);
   
 
   MPI_Comm_size(world,&nprocs);
   MPI_Comm_rank(world,&me);
 
+  // pass axes along so that z varies most slowly, then y, then x
 
-  sizeax[1] = local_n0;
-  global_x_size = Nx;
+  if (rOc == Transform::C2C) {
+
+
+    alloc_local = fftw_mpi_local_size_2d(Ny , Nx,
+					 world,&local_n0,&local_0_start);
+    
+    sizeax[1] = local_n0;
+    sizeax[0] = Nx;
+    global_x_size = Nx;
+
+    arr = (T*) fftw_alloc_complex(alloc_local);
+    spacer=Nx;
+    size = alloc_local;
+
+    
+  } else {
+    alloc_local = fftw_mpi_local_size_2d(Ny , Nx/2 + 1,
+					 world,&local_n0,&local_0_start);
+    
+    sizeax[1] = local_n0;
+    global_x_size = Nx;
+    
+
+    if (typeid(T) == typeid(double)) {
+      sizeax[0] = Nx;
+      arr = (T*) fftw_alloc_real(2*alloc_local);
+      spacer = 2*(Nx/2+1);    
+      size = spacer*alloc_local;
+    } else if (typeid(T) == typeid(std::complex<double>)) {
+      sizeax[0] = Nx/2+1;
+      arr = (T*) fftw_alloc_complex(alloc_local);
+      spacer=Nx/2+1;
+      size = alloc_local;
+    } else
+      throw std::runtime_error("array2D can only have type double, "
+			       "or std::complex<double>.");
+    
+  }
 
   int processor_used = 1;
-
+  
   if (sizeax[1] == 0)
     processor_used = 0;
-
+  
   int global_procs;
-
+  
   MPI_Allreduce(&processor_used, &global_procs, 1, MPI_INT, MPI_SUM, world);
-
+  
   if (global_procs != nprocs)
     throw std::runtime_error("Only " + std::to_string(global_procs)
 			     + " out of " + std::to_string(nprocs)
 			     + " processors have fftwArr data stored.");
-    
-
-  if (typeid(T) == typeid(double)) {
-    sizeax[0] = Nx;
-    arr = (T*) fftw_alloc_real(2*alloc_local);
-    spacer = 2*(Nx/2+1);    
-    size = spacer*alloc_local;
-  } else if (typeid(T) == typeid(std::complex<double>)) {
-    sizeax[0] = Nx/2+1;
-    arr = (T*) fftw_alloc_complex(alloc_local);
-    spacer=Nx/2+1;
-    size = alloc_local;
-  } else
-    throw std::runtime_error("array2D can only have type double, "
-			     "or std::complex<double>.");
   
-    
+  
   array_name = name;
-
+  
   // the next line sets all elements of the array equal to zero
   *this = 0;
 };
@@ -157,8 +193,8 @@ array2D<T>::array2D(const MPI_Comm &comm,std::string name,
 
 
 
-template <typename T>
-array2D<T>::array2D(const array2D<T> & base,std::string name)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>::array2D(const array2D<rOc,T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
     global_x_size(base.global_x_size),nprocs(base.nprocs),me(base.me),world(base.world)
@@ -187,19 +223,26 @@ array2D<T>::array2D(const array2D<T> & base,std::string name)
   
 
   ptrdiff_t tmpsize;
-  
-  if (typeid(T) == typeid(double)) {
-    arr = (T*) fftw_alloc_real(2*alloc_local);
 
-    tmpsize = 2*alloc_local;
-  } else if (typeid(T) == typeid(std::complex<double>)) {
+  if (rOc == Transform::C2C) {
     arr = (T*) fftw_alloc_complex(alloc_local);
     tmpsize = alloc_local;
 
-  } else
-    throw std::runtime_error("array2D can only have type double, "
-			     "or std::complex<double>.");
+  } else {
 
+  
+    if (typeid(T) == typeid(double)) {
+      arr = (T*) fftw_alloc_real(2*alloc_local);
+      
+      tmpsize = 2*alloc_local;
+    } else if (typeid(T) == typeid(std::complex<double>)) {
+      arr = (T*) fftw_alloc_complex(alloc_local);
+      tmpsize = alloc_local;
+      
+    } else
+      throw std::runtime_error("array2D can only have type double, "
+			       "or std::complex<double>.");
+  }
     
   if (name != "") array_name = name;
   else std::copy(base.arr, base.arr + tmpsize,arr);
@@ -208,66 +251,17 @@ array2D<T>::array2D(const array2D<T> & base,std::string name)
 }
 
 
-template <typename T>
-void array2D<T>::assign(const MPI_Comm &comm,std::string name,
-			 ptrdiff_t Nx, ptrdiff_t Ny)
-/*
-
-  Parameters
-  ----------
-  comm : mpi communicator
-      Typically MPI_COMM_WORLD, but could be other I suppose.
-  name : string
-      The name of the array (useful when needing to save data).
-  Nx : ptrdiff_t
-      The (global) number of points in the x direction
-  Ny : ptrdiff_t
-      The (global) number of points in the y direction
-      
-      
-*/
-{
-  ptrdiff_t local_n0;
-  
-  world = comm;
-  alloc_local = fftw_mpi_local_size_2d(Ny , Nx/2 + 1,
-				       world,&local_n0,&local_0_start);
-  
-  MPI_Comm_size(world,&nprocs);
-  MPI_Comm_rank(world,&me);
-  
-  sizeax[1] = local_n0;
-  global_x_size = Nx;
-
-  if (typeid(T) == typeid(double)) {
-    sizeax[0] = Nx;
-    arr = (T*) fftw_alloc_real(2*alloc_local);
-    spacer = 2*(Nx/2+1);    
-    size = spacer*alloc_local;
-  } else if (typeid(T) == typeid(std::complex<double>)) {
-    sizeax[0] = Nx/2+1;
-    arr = (T*) fftw_alloc_complex(alloc_local);
-    spacer=Nx/2+1;
-    size = alloc_local;
-  } else
-    throw std::runtime_error("array2D can only have type double, "
-			     "or std::complex<double>.");
-  
-  array_name = name;
-  
-};
 
 
-
-template <typename T>
-array2D<T>::~array2D() {
+template < enum Transform rOc,typename T>
+array2D<rOc,T>::~array2D() {
   fftw_free(arr);
 }
 
 
 
-template <typename T>
-T& array2D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny)
+template < enum Transform rOc,typename T>
+T& array2D<rOc,T>::operator()(ptrdiff_t nx,ptrdiff_t ny)
 /* read/write access array elements via (nx,ny). */
 {
 
@@ -276,8 +270,8 @@ T& array2D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny)
 
 
 
-template <typename T>
-T array2D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny) const
+template < enum Transform rOc,typename T>
+T array2D<rOc,T>::operator()(ptrdiff_t nx,ptrdiff_t ny) const
 /* read-only access (but don't change) array elements via (nx,ny). */
 {
   return arr[nx +  ny * spacer];
@@ -287,8 +281,8 @@ T array2D<T>::operator()(ptrdiff_t nx,ptrdiff_t ny) const
 
 
 
-template <typename T>
-T& array2D<T>::operator()(ptrdiff_t flat)
+template < enum Transform rOc,typename T>
+T& array2D<rOc,T>::operator()(ptrdiff_t flat)
 /* read/write access array elements via flattened array. */
 {
 
@@ -300,8 +294,8 @@ T& array2D<T>::operator()(ptrdiff_t flat)
 
 
 
-template <typename T>
-T array2D<T>::operator()(ptrdiff_t flat) const
+template < enum Transform rOc,typename T>
+T array2D<rOc,T>::operator()(ptrdiff_t flat) const
 /* read-only access (but don't change) array elements via flattened array. */
 {
 
@@ -314,8 +308,8 @@ T array2D<T>::operator()(ptrdiff_t flat) const
 
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator=(array2D<T> other)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator=(array2D<rOc,T> other)
 {
   swap(*this,other);
   
@@ -323,8 +317,8 @@ array2D<T>& array2D<T>::operator=(array2D<T> other)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator=(T other)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator=(T other)
 {
   for (int ny = 0; ny < sizeax[1]; ny++) {
     for (int nx = 0; nx < sizeax[0]; nx++) {
@@ -338,8 +332,8 @@ array2D<T>& array2D<T>::operator=(T other)
 
 
 
-template <typename T>
-void array2D<T>::reverseFlat(int gridindex, int &nx, int &ny) const
+template < enum Transform rOc,typename T>
+void array2D<rOc,T>::reverseFlat(int gridindex, int &nx, int &ny) const
 {
 
   nx = gridindex % sizeax[0];
@@ -350,8 +344,8 @@ void array2D<T>::reverseFlat(int gridindex, int &nx, int &ny) const
 
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator*=(T rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator*=(T rhs)
 {
   for (int ny = 0; ny < sizeax[1]; ny++) {
     for (int nx = 0; nx < sizeax[0]; nx++) {
@@ -362,8 +356,8 @@ array2D<T>& array2D<T>::operator*=(T rhs)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator/=(T rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator/=(T rhs)
 {
   for (int ny = 0; ny < sizeax[1]; ny++) {
     for (int nx = 0; nx < sizeax[0]; nx++) {
@@ -373,8 +367,8 @@ array2D<T>& array2D<T>::operator/=(T rhs)
   return *this;
 }
 
-template <typename T>
-array2D<T>& array2D<T>::operator+=(T rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator+=(T rhs)
 {
   for (int ny = 0; ny < sizeax[1]; ny++) {
     for (int nx = 0; nx < sizeax[0]; nx++) {
@@ -385,8 +379,8 @@ array2D<T>& array2D<T>::operator+=(T rhs)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator-=(T rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator-=(T rhs)
 {
   for (int ny = 0; ny < sizeax[1]; ny++) {
     for (int nx = 0; nx < sizeax[0]; nx++) {
@@ -396,8 +390,8 @@ array2D<T>& array2D<T>::operator-=(T rhs)
   return *this;
 }
 
-template <typename T>
-array2D<T>& array2D<T>::operator*=(const array2D<T>& rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator*=(const array2D<rOc,T>& rhs)
 {
   if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
     std::string errmsg
@@ -413,8 +407,8 @@ array2D<T>& array2D<T>::operator*=(const array2D<T>& rhs)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator/=(const array2D<T>& rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator/=(const array2D<rOc,T>& rhs)
 {
 
   if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
@@ -432,8 +426,8 @@ array2D<T>& array2D<T>::operator/=(const array2D<T>& rhs)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator+=(const array2D<T>& rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator+=(const array2D<rOc,T>& rhs)
 {
 
   if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
@@ -451,8 +445,8 @@ array2D<T>& array2D<T>::operator+=(const array2D<T>& rhs)
 }
 
 
-template <typename T>
-array2D<T>& array2D<T>::operator-=(const array2D<T>& rhs)
+template < enum Transform rOc,typename T>
+array2D<rOc,T>& array2D<rOc,T>::operator-=(const array2D<rOc,T>& rhs)
 {
 
   if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
@@ -470,8 +464,8 @@ array2D<T>& array2D<T>::operator-=(const array2D<T>& rhs)
 }
 
 
-template <typename T>
-void array2D<T>::write_to_binary(std::fstream &myfile,
+template < enum Transform rOc,typename T>
+void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
 				 const bool overlap)
 /* write the current processor's array data to a binary file.
    If overlap = true, then the file also shares one x line of
@@ -490,7 +484,7 @@ void array2D<T>::write_to_binary(std::fstream &myfile,
 
   if (!fftw_recv && overlap)
     fftw_recv
-      = std::make_unique<array2D<T>>(world,array_name
+      = std::make_unique<array2D<rOc,T>>(world,array_name
 				     +std::string("_neighborplane"),
 				     global_x_size,nprocs);
 
@@ -582,8 +576,8 @@ void array2D<T>::write_to_binary(std::fstream &myfile,
 
 
 
-template <typename T>
-void array2D<T>::read_from_binary(std::fstream &myfile,
+template < enum Transform rOc,typename T>
+void array2D<rOc,T>::read_from_binary(std::fstream &myfile,
 				  const bool overlap)
 {
   unsigned int bytelength;
@@ -640,8 +634,8 @@ void array2D<T>::read_from_binary(std::fstream &myfile,
 
 
 
-template <typename T>
-std::string array2D<T>::operation_err_msg(const std::string & othername,
+template < enum Transform rOc,typename T>
+std::string array2D<rOc,T>::operation_err_msg(const std::string & othername,
 					  const std::string & operation)
 {
     std::string errmsg;
@@ -655,5 +649,6 @@ std::string array2D<T>::operation_err_msg(const std::string & othername,
 
 
 
-template class fftwArr::array2D<double>;
-template class fftwArr::array2D<std::complex<double>>;
+template class fftwArr::array2D<fftwArr::Transform::R2C,double>;
+template class fftwArr::array2D<fftwArr::Transform::C2R,std::complex<double>>;
+template class fftwArr::array2D<fftwArr::Transform::C2C,std::complex<double>>;

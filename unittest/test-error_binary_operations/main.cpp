@@ -4,10 +4,10 @@
 #include <complex>
 #include "fftw_arr/array2d.hpp"
 #include "fftw_arr/array3d.hpp"
+#include "fftw_arr_testing_utils/utils.hpp"
 
-template <typename T>
+template < enum fftwArr::Transform rOc, typename T>
 void test_function(MPI_Comm ,int );
-
 
 int main()
 {
@@ -23,14 +23,14 @@ int main()
   
   fftw_mpi_init();
 
-  // see test-ostream for explanation of the next
-  // three lines
-  std::tuple<double,std::complex<double>> types;
+  for (int dim = 2; dim <= 3; dim++) {
+    test_function<fftwArr::Transform::R2C,double>(world,dim);
 
-  for (int dim = 2; dim <= 3; dim++) 
+    test_function<fftwArr::Transform::C2R,std::complex<double>>(world,dim);
 
-    std::apply([=](auto... args){((test_function<decltype(args)>(world,dim)),...);},types);  
+    test_function<fftwArr::Transform::C2C,std::complex<double>>(world,dim);
 
+  }
   
   fftw_mpi_cleanup();
 
@@ -39,18 +39,25 @@ int main()
   return 0;
 }
 
-template <typename T>
+template < enum fftwArr::Transform rOc, typename T>
 void test_function(MPI_Comm world,int dim)
 {
+
+
+  int me;
+  MPI_Comm_rank(world,&me);
+  std::string dtype = fftwArrTestingUtils::TypeToString(typeid(T).name());
+
+  
   if (dim == 2) {
     int Nx = 20;
     int Ny = 7;
     
     // define the array to be transform, phi(x,y,z), in both real and fourier space
-    fftwArr::array2D<T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny);
-    fftwArr::array2D<T> phi_2;
+    fftwArr::array2D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny);
+    fftwArr::array2D<rOc,T> phi_2;
     
-    phi_2 = fftwArr::array2D<T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny);
+    phi_2 = fftwArr::array2D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny);
     
     phi_2 = 1.0;
     
@@ -91,20 +98,16 @@ void test_function(MPI_Comm world,int dim)
       }
     }
     
-    if (phi_1.get_me() == 0)
-      std::cout << "\nTesting for 2D fftwArr of type " << typeid(T).name()
-		<< " was successful.\n" << std::endl;
-
   } else if (dim == 3) {
     int Nx = 20;
     int Ny = 7;
     int Nz = 13;
     
     // define the array to be transform, phi(x,y,z), in both real and fourier space
-    fftwArr::array3D<T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,Nz);
-    fftwArr::array3D<T> phi_2;
+    fftwArr::array3D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,Nz);
+    fftwArr::array3D<rOc,T> phi_2;
     
-    phi_2 = fftwArr::array3D<T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny,Nz);
+    phi_2 = fftwArr::array3D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny,Nz);
     
     phi_2 = 1.0;
     
@@ -146,8 +149,10 @@ void test_function(MPI_Comm world,int dim)
       }
     }
     
-    if (phi_1.get_me() == 0)
-      std::cout << "\nTesting for 3D fftwArr of type " << typeid(T).name()
-		<< " was successful.\n" << std::endl;
   }
+
+  if (me == 0)
+    std::cout << fftwArrTestingUtils::SuccessMessage(dtype,rOc,dim) << std::endl;
+
+  
 }
