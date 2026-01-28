@@ -129,6 +129,9 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
 
   // pass axes along so that z varies most slowly, then y, then x
 
+  global_x_size = Nx;
+  global_y_size = Ny;
+  
   if (rOc == Transform::C2C) {
 
 
@@ -137,7 +140,7 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
     
     sizeax[1] = local_n0;
     sizeax[0] = Nx;
-    global_x_size = Nx;
+
 
     arr = (T*) fftw_alloc_complex(alloc_local);
     spacer=Nx;
@@ -149,7 +152,6 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
 					 world,&local_n0,&local_0_start);
     
     sizeax[1] = local_n0;
-    global_x_size = Nx;
     
 
     if (typeid(T) == typeid(double)) {
@@ -197,7 +199,8 @@ template < enum Transform rOc,typename T>
 array2D<rOc,T>::array2D(const array2D<rOc,T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
-    global_x_size(base.global_x_size),nprocs(base.nprocs),me(base.me),world(base.world)
+    global_x_size(base.global_x_size),global_y_size(base.global_y_size),
+    nprocs(base.nprocs),me(base.me),world(base.world)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the

@@ -26,7 +26,7 @@ private:
   ptrdiff_t size;
   int nprocs,me;
 
-  ptrdiff_t global_x_size;        // global size of the Nx (since it is not saved anywhere else)
+  ptrdiff_t global_x_size,global_z_size;        // global size of the Nx (since it is not saved anywhere else)
   std::array<ptrdiff_t,3> sizeax; // local axis sizes of the array {nx,ny,nz} 
   
   std::string array_name;
@@ -64,6 +64,26 @@ public:
   };
 
 
+  ptrdiff_t global_Nx() const {
+    return global_x_size;
+  }
+
+
+  /* you don't need a "get global y size" since it is always given by Ny(),
+     but I'm including it here.*/
+  
+
+
+  ptrdiff_t global_Ny() const {
+    return sizeax[1];
+  }
+
+  
+  ptrdiff_t global_Nz() const {
+    return global_z_size;
+  }
+  
+  
   ptrdiff_t Nx() const
   {
     return sizeax[0];

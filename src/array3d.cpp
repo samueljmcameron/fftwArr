@@ -136,6 +136,10 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
   MPI_Comm_rank(world,&me);
   
   // pass axes along so that z varies most slowly, then y, then x
+
+
+  global_x_size = Nx;
+  global_z_size = Nz;
   
   if (rOc == Transform::C2C) {
     
@@ -146,7 +150,6 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
     sizeax[2] = local_n0;
     sizeax[1] = Ny;
     sizeax[0]= Nx;
-    global_x_size = Nx;
 
     arr = (T*) fftw_alloc_complex(alloc_local);
     spacer=Nx;
@@ -159,7 +162,7 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
   
     sizeax[2] = local_n0;
     sizeax[1] = Ny;
-    global_x_size = Nx;
+
     
         
     if (typeid(T) == typeid(double)) {
@@ -207,7 +210,8 @@ template < enum Transform rOc,typename T>
 array3D<rOc,T>::array3D(const array3D<rOc,T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
-    global_x_size(base.global_x_size),nprocs(base.nprocs),me(base.me),world(base.world)
+    global_x_size(base.global_x_size),global_z_size(base.global_z_size),
+    nprocs(base.nprocs),me(base.me),world(base.world)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the
