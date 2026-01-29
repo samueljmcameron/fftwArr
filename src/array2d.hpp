@@ -6,7 +6,9 @@
 #include <string>
 #include <iostream>
 #include <complex>
+#include <vector>
 #include <memory>
+#include <functional>
 #include <fstream>
 
 #include "fftw_arr.hpp"
@@ -44,9 +46,9 @@ public:
   array2D(const array2D<rOc,T> &,std::string name = "");
 
 
-  void assign(const MPI_Comm &,std::string,
-	      ptrdiff_t, ptrdiff_t);
-
+  void apply_function(std::function<T(double,double)>,
+		      const std::array<double,2> &,
+		      const std::array<double,2> & o = {0.0,0.0});
 
   ~array2D();
 
@@ -126,7 +128,7 @@ public:
   array2D<rOc,T>& operator=(array2D<rOc,T> other);
 
   void reverseFlat(int,  int &, int &) const;
-
+  std::vector<int> split_sizes();
 
   array2D<rOc,T>& operator*=(T rhs);
   array2D<rOc,T>& operator/=(T rhs);

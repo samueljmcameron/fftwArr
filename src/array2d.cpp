@@ -264,6 +264,66 @@ array2D<rOc,T>::~array2D() {
 
 
 template < enum Transform rOc,typename T>
+void array2D<rOc,T>
+::apply_function(std::function<T(double,double)> func,
+		 const std::array<double,2> & differential,
+		 const std::array<double,2> & origin)
+{
+
+  if (rOc == Transform::C2C) {
+
+    double qx,qy;
+
+    for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+      if (jy + local_0_start > global_y_size/2)
+	qy = (-global_y_size + jy + local_0_start ) * differential[1];
+      else
+	qy = ( jy + local_0_start ) * differential[1];
+      for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	if (ix > global_x_size/2)
+	  qx = (-global_x_size + ix ) * differential[0];
+	else
+	  qx = ix * differential[0];
+	
+	(*this)(ix,jy) = func(qx,qy);
+      }
+    }
+  } else if (rOc == Transform::C2R) {
+    
+    double qx, qy;
+    
+    for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+      if (jy + local_0_start > global_y_size/2)
+	qy = (-global_y_size + jy + local_0_start ) * differential[1];
+      else
+	qy = ( jy + local_0_start ) * differential[1];
+      for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	qx = ix * differential[0];
+	
+	(*this)(ix,jy) = func(qx,qy);
+      }
+    }
+    
+  }  else if (rOc == Transform::R2C) {
+    
+    double x, y;
+    for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+      y = ( jy + local_0_start ) * differential[1] + origin[1];
+      for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	x = ix * differential[0] + origin[0];
+	
+	(*this)(ix,jy) = func(x,y);
+      }
+      
+    }
+    
+  } else
+    throw std::runtime_error("NEVER GET HERE...");
+  return;
+}
+
+
+template < enum Transform rOc,typename T>
 T& array2D<rOc,T>::operator()(ptrdiff_t nx,ptrdiff_t ny)
 /* read/write access array elements via (nx,ny). */
 {
@@ -343,6 +403,24 @@ void array2D<rOc,T>::reverseFlat(int gridindex, int &nx, int &ny) const
   ny = gridindex / sizeax[0];
 
 
+}
+
+template < enum Transform rOc,typename T>
+std::vector<int> array2D<rOc,T>::split_sizes()
+{
+  std::vector<int> split_sizes(nprocs);
+
+  for (int i = 0; i < nprocs; i++) {
+
+    if (i == me)
+      split_sizes.at(i) = sizeax[1];
+
+    MPI_Bcast(&split_sizes.at(i),1,MPI_INT,i,world);
+
+  }
+
+  return split_sizes;
+  
 }
 
 

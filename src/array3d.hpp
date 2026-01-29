@@ -6,7 +6,9 @@
 #include <string>
 #include <iostream>
 #include <complex>
+#include <vector>
 #include <memory>
+#include <functional>
 #include <fstream>
 
 #include "fftw_arr.hpp"
@@ -26,7 +28,7 @@ private:
   ptrdiff_t size;
   int nprocs,me;
 
-  ptrdiff_t global_x_size,global_z_size;        // global size of the Nx (since it is not saved anywhere else)
+  ptrdiff_t global_x_size,global_z_size; 
   std::array<ptrdiff_t,3> sizeax; // local axis sizes of the array {nx,ny,nz} 
   
   std::string array_name;
@@ -45,7 +47,11 @@ public:
 	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
   array3D(const array3D<rOc,T> &,std::string name = "");
 
+  void apply_function(std::function<T(double,double,double)>,
+		      const std::array<double,3> &,
+		      const std::array<double,3> & o = {0.0,0.0,0.0});
 
+  
   ~array3D();
 
 
@@ -63,18 +69,17 @@ public:
     return size;
   };
 
-
+  
   ptrdiff_t global_Nx() const {
     return global_x_size;
   }
 
-
-  /* you don't need a "get global y size" since it is always given by Ny(),
-     but I'm including it here.*/
   
-
-
   ptrdiff_t global_Ny() const {
+    /*
+      you don't need a "get global y size" since it
+       is always given by Ny(), but I'm including it here.
+    */
     return sizeax[1];
   }
 
@@ -141,6 +146,7 @@ public:
   array3D<rOc,T>& operator=(array3D<rOc,T> other);
 
   void reverseFlat(int,  int &, int &, int &) const;
+  std::vector<int> split_sizes();
 
 
   array3D<rOc,T>& operator*=(T rhs);

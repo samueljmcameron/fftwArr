@@ -274,6 +274,86 @@ array3D<rOc,T>::~array3D() {
 
 
 template < enum Transform rOc,typename T>
+void array3D<rOc,T>
+::apply_function(std::function<T(double,double,double)> func,
+		 const std::array<double,3> & differential,
+		 const std::array<double,3> & origin)
+{
+
+  ptrdiff_t global_y_size = sizeax[1];
+  if (rOc == Transform::C2C) {
+
+    double qx,qy,qz;
+
+    for (int kz = 0; kz < sizeax[2]; kz ++) {
+      if (kz + local_0_start > global_z_size/2)
+	qz = (-global_z_size + kz + local_0_start ) * differential[2];
+      else
+      	qz = ( kz + local_0_start ) * differential[2];
+      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	if (jy > global_y_size/2)
+	  qy = (-global_y_size + jy ) * differential[1];
+	else
+	  qy =  jy * differential[1];
+	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	  if (ix > global_x_size/2)
+	    qx = (-global_x_size + ix ) * differential[0];
+	  else
+	    qx = ix * differential[0];
+	  
+	  (*this)(ix,jy,kz) = func(qx,qy,qz);
+	  
+	}
+      }
+    }
+  } else if (rOc == Transform::C2R) {
+    
+    double qx,qy,qz;
+
+    for (int kz = 0; kz < sizeax[2]; kz ++) {
+      if (kz + local_0_start > global_z_size/2)
+	qz = (-global_z_size + kz + local_0_start ) * differential[2];
+      else
+      	qz = ( kz + local_0_start ) * differential[2];
+      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	if (jy > global_y_size/2)
+	  qy = (-global_y_size + jy ) * differential[1];
+	else
+	  qy =  jy * differential[1];
+	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	  qx = ix * differential[0];
+	  
+	  (*this)(ix,jy,kz) = func(qx,qy,qz);
+	  
+	}
+      }
+    }
+  } else if (rOc == Transform::R2C) {
+    double x, y, z;
+    
+    for (int kz = 0; kz < sizeax[2]; kz ++ ) {
+      z = ( kz + local_0_start ) *differential[2] + origin[2];
+      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	y =  jy * differential[1] + origin[1];
+	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	  x = ix * differential[0] + origin[0];
+	
+	  (*this)(ix,jy,kz) = func(x,y,z);
+
+	}
+      }
+    }
+
+  } else
+    throw std::runtime_error("NEVER GET HERE...");
+  
+  return;
+
+}
+
+
+
+template < enum Transform rOc,typename T>
 T& array3D<rOc,T>::operator()(ptrdiff_t nx,ptrdiff_t ny, ptrdiff_t nz)
 /* read/write access array elements via (nx,ny,nz). */
 {
@@ -358,7 +438,23 @@ void array3D<rOc,T>::reverseFlat(int gridindex, int &nx, int &ny, int &nz) const
 
 }
 
+template < enum Transform rOc,typename T>
+std::vector<int> array3D<rOc,T>::split_sizes()
+{
+  std::vector<int> split_sizes(nprocs);
 
+  for (int i = 0; i < nprocs; i++) {
+
+    if (i == me)
+      split_sizes.at(i) = sizeax[2];
+
+    MPI_Bcast(&split_sizes.at(i),1,MPI_INT,i,world);
+
+  }
+
+  return split_sizes;
+  
+}
 
 template < enum Transform rOc,typename T>
 array3D<rOc,T>& array3D<rOc,T>::operator*=(T rhs)
