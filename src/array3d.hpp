@@ -8,7 +8,6 @@
 #include <complex>
 #include <vector>
 #include <memory>
-#include <functional>
 #include <fstream>
 
 #include "fftw_arr.hpp"
@@ -43,13 +42,15 @@ private:
 public:
 
   array3D();
+
   array3D(const MPI_Comm &,std::string,
 	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
   array3D(const array3D<rOc,T> &,std::string name = "");
 
-  void apply_function(std::function<T(double,double,double)>,
-		      const std::array<double,3> &,
-		      const std::array<double,3> & o = {0.0,0.0,0.0});
+
+  void apply_function(T (*)(double,double,double),
+		      const std::array<double,3> & ,
+		      const std::array<double,3> & origin = {0.0,0.0,0.0});
 
   
   ~array3D();
@@ -180,16 +181,28 @@ public:
     using std::swap;
 
     swap(first.arr,second.arr);
+
     swap(first.alloc_local,second.alloc_local);
     swap(first.local_0_start,second.local_0_start);
+
     swap(first.size,second.size);
-    swap(first.sizeax,second.sizeax);
-    swap(first.array_name,second.array_name);
-    swap(first.spacer,second.spacer);
-    swap(first.me,second.me);
+
     swap(first.nprocs,second.nprocs);
+    swap(first.me,second.me);
+
+    swap(first.global_z_size,second.global_z_size);
+    swap(first.global_x_size,second.global_x_size);
+
+    swap(first.sizeax,second.sizeax);
+
+    swap(first.array_name,second.array_name);
+
+    swap(first.spacer,second.spacer);
+
     swap(first.world,second.world);
-    
+
+    swap(first.fftw_recv,second.fftw_recv);
+
     return;
 
   }

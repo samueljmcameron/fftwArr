@@ -261,19 +261,16 @@ array2D<rOc,T>::~array2D() {
   fftw_free(arr);
 }
 
-
-
 template < enum Transform rOc,typename T>
-void array2D<rOc,T>
-::apply_function(std::function<T(double,double)> func,
-		 const std::array<double,2> & differential,
-		 const std::array<double,2> & origin)
+void array2D<rOc,T>::apply_function(T (*func)(double,double),
+				    const std::array<double,2> & differential,
+				    const std::array<double,2> & origin)
 {
-
+  
   if (rOc == Transform::C2C) {
-
+    
     double qx,qy;
-
+    
     for (int jy = 0; jy < sizeax[1]; jy ++ ) {
       if (jy + local_0_start > global_y_size/2)
 	qy = (-global_y_size + jy + local_0_start ) * differential[1];
@@ -321,6 +318,7 @@ void array2D<rOc,T>
     throw std::runtime_error("NEVER GET HERE...");
   return;
 }
+
 
 
 template < enum Transform rOc,typename T>

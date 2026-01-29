@@ -271,13 +271,10 @@ array3D<rOc,T>::~array3D() {
   fftw_free(arr);
 }
 
-
-
 template < enum Transform rOc,typename T>
-void array3D<rOc,T>
-::apply_function(std::function<T(double,double,double)> func,
-		 const std::array<double,3> & differential,
-		 const std::array<double,3> & origin)
+void array3D<rOc,T>::apply_function(T (*func)(double,double,double),
+				    const std::array<double,3> & differential,
+				    const std::array<double,3> & origin)
 {
 
   ptrdiff_t global_y_size = sizeax[1];
@@ -289,7 +286,7 @@ void array3D<rOc,T>
       if (kz + local_0_start > global_z_size/2)
 	qz = (-global_z_size + kz + local_0_start ) * differential[2];
       else
-      	qz = ( kz + local_0_start ) * differential[2];
+	qz = ( kz + local_0_start ) * differential[2];
       for (int jy = 0; jy < sizeax[1]; jy ++ ) {
 	if (jy > global_y_size/2)
 	  qy = (-global_y_size + jy ) * differential[1];
@@ -314,7 +311,7 @@ void array3D<rOc,T>
       if (kz + local_0_start > global_z_size/2)
 	qz = (-global_z_size + kz + local_0_start ) * differential[2];
       else
-      	qz = ( kz + local_0_start ) * differential[2];
+	qz = ( kz + local_0_start ) * differential[2];
       for (int jy = 0; jy < sizeax[1]; jy ++ ) {
 	if (jy > global_y_size/2)
 	  qy = (-global_y_size + jy ) * differential[1];
@@ -337,7 +334,7 @@ void array3D<rOc,T>
 	y =  jy * differential[1] + origin[1];
 	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	  x = ix * differential[0] + origin[0];
-	
+
 	  (*this)(ix,jy,kz) = func(x,y,z);
 
 	}
