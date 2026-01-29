@@ -1,0 +1,169 @@
+Define the  GLOBAL indices of the wavevector q as (nx,ny,nz), i.e.
+
+    q = (2*pi*nx/Lx,2*pi*ny/Ly,2*pi*nz/Lz)
+
+with Lx, Ly, and Lz being the system sizes in real space. If the
+array is arr(nx,ny,nz) then the correct symmetry is
+
+   conjugate(array(nx,ny,nz)) = array(kx*Nx-nx,ky*Ny-ny,kz*Nz-nz)
+
+where Nx, Ny, Nz are the grid point numbers, and kx, ky, and kz
+are all (arbitrary) integers. The relevant case for us is
+
+   conjugate(array(nx,ny,nz)) = array(Nx-nx,Ny-ny,Nz-nz).
+
+
+First, we note that the box in Fourier space chosen by DFT is
+not the first Brillouin zone. Below, we show for Nx = 4,
+Ny = 10, and Nz = 24 the Fourier space domain used in DFT.
+
+
+    Nx//2 ________________________
+         /                       /|
+        /                       / | 
+    0  /______________________ /  |
+  Ny-1 |                       |  |
+       |                       |  |
+       |                       |  |
+       |                       |  |
+       |                       |  |
+       |                       |  |
+       |                       |  /
+       |                       | /
+       |_______________________|/
+     0
+       0                      Nz-1
+
+
+We need to rearrane this into the Brillouin zone so first,
+we divide it into blocks
+
+
+    Nx//2 ________________________
+         /            /          /|
+        /            /          / | 
+    0  /____________/__________/  |
+ Ny-1  |            |          |  |
+       |    ^       |   ^      |  /
+       |    C->     |   D->    | /|
+       |____________|__________|/ |
+ Ny//2 |            |          |  |
+       |    ^       |   ^      |  |
+       |    A ->    |   B->    |  /
+       |            |          | /
+       |____________|__________|/
+     0
+       0          Nz//2       Nz-1
+
+
+Due to periodicity, we know that
+
+    array(nx,ny,nz) ->  array(nx+kx*Nx,ny+ky*Ny,nz+kz*Nz)
+
+where Nx, Ny, Nz are the grid point numbers, and kx, ky, and kz
+are all (arbitrary) integers.
+    
+Block A stays where it is. The transform applied is
+the identity,
+
+    array(nx,ny,nz) ->  array(nx,ny,nz)
+
+and the vertices stay the same at
+
+(i,0,0)
+(i,Ny//2,0)
+(i,0,Nz//2)
+(i,Ny//2,Nz//2)
+
+(i,0,0)
+(i,Ny//2,0)
+(i,0,Nz//2)
+(i,Ny//2,Nz//2)
+
+for i in {0,Nx//2}.
+
+Block B has to transform. The transform applied is
+
+  array(nx,ny,nz) ->  array(nx,ny,nz-Nz)
+
+so the vertices are moved to
+
+(i,0,Nz//2+1)     -> (0,0,1-Nz//2)
+(i,0,Nz-1)        -> (0,0,-1)
+(i,Ny//2,Nz//2+1) -> (0,Ny//2,1-Nz//2)
+(i,Ny//2,Nz-1)    -> (0,Ny//2,-1)
+
+for i in {0,Nx//2}.
+
+Block C has to transform. The transform applied is
+
+  array(nx,ny,nz) ->  array(nx,ny-Ny,nz)
+
+so the vertices are moved to
+
+(i,Ny//2+1,0)     -> (0,1-Ny//2,0)
+(i,Ny-1,0)        -> (0,-1,0)
+(i,Ny//2+1,Nz//2) -> (0,1-Ny//2,Nz//2)
+(i,Ny-1,Nz//2)    -> (0,-1,Nz//2)
+
+for i in {0,Nx//2}.
+
+Block D has to transform. The transform applied is
+
+  array(nx,ny,nz) ->  array(nx,ny-Ny,nz-Nz)
+
+so the vertices are moved to
+
+(i,Ny//2+1,Nz//2+1) -> (0,1-Ny//2,1-Nz//2)
+(i,Ny-1,Nz//2+1)    -> (0,-1,1-Nz//2)
+(i,Ny//2+1,Nz-1)    -> (0,1-Ny//2,-1)
+(i,Ny-1,Nz-1)       -> (0,-1,-1)
+
+for i in {0,Nx//2}.
+
+
+Therefore, the Brillouin zone is
+
+    Nx//2 ________________________
+         /          /            /|
+        /          /            / | 
+    0  /__________/____________/  |
+ Ny//2 |          |            |  |
+       |      ^   |    ^       |  |
+       |    <-B   |    A->     |  /
+       |          |            | /|
+       |__________|____________|/ |
+    0  |          |            |  |
+       |   <-D    |    C->     |  /
+       |     ⌄    |    ⌄       | / 
+       |__________|____________|/
+1-Ny//2       
+      1-Nz//2     0          Nz//2
+
+
+
+Practically, the way to approach this when calling a
+function which depends on qx,qy,qz is to do
+
+
+for (int kz = 0; kz < ft_phi.Nz(); kz ++ ) {
+  if (kz + ft_phi.get_local0start() > ft_phi.global_Nz()/2)
+    qz = (-ft_phi.global_Nz() + kz + ft_phi.get_local0start() ) * dqz;
+  else
+    qz = ( kz + ft_phi.get_local0start() ) * dqz;
+  for (int jy = 0; jy < ft_phi.Ny(); jy ++ ) {
+    if (jy > ft_phi.global_Ny()/2)
+      qz = (-ft_phi.global_Ny() + jy ) * dqy;
+    else
+      qy = jy * dqy;
+    for (int ix = 0; ix < ft_phi.Nx(); ix ++ ) {
+      qx = ix * dqx;
+      ft_phi(ix,jy,kz) = PHI(qx,qy,qz);
+      // PHI(qx,qy,qz) is some function like sin(qx)*4*qy + qz
+    }
+  }
+}
+
+
+
+Next, we consider the fact that we are 
