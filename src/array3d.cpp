@@ -272,7 +272,8 @@ array3D<rOc,T>::~array3D() {
 }
 
 template < enum Transform rOc,typename T>
-void array3D<rOc,T>::apply_function(T (*func)(double,double,double),
+void array3D<rOc,T>::apply_function(T (*func)(double,double,double,void *),
+				    void *params,
 				    const std::array<double,3> & differential,
 				    const std::array<double,3> & origin)
 {
@@ -298,7 +299,7 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double),
 	  else
 	    qx = ix * differential[0];
 	  
-	  (*this)(ix,jy,kz) = func(qx,qy,qz);
+	  (*this)(ix,jy,kz) = func(qx,qy,qz,params);
 	  
 	}
       }
@@ -320,7 +321,7 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double),
 	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	  qx = ix * differential[0];
 	  
-	  (*this)(ix,jy,kz) = func(qx,qy,qz);
+	  (*this)(ix,jy,kz) = func(qx,qy,qz,params);
 	  
 	}
       }
@@ -335,7 +336,7 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double),
 	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	  x = ix * differential[0] + origin[0];
 
-	  (*this)(ix,jy,kz) = func(x,y,z);
+	  (*this)(ix,jy,kz) = func(x,y,z,params);
 
 	}
       }

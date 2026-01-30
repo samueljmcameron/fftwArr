@@ -48,8 +48,8 @@ public:
   array3D(const array3D<rOc,T> &,std::string name = "");
 
 
-  void apply_function(T (*)(double,double,double),
-		      const std::array<double,3> & ,
+  void apply_function(T (*)(double,double,double,void *),
+		      void *,const std::array<double,3> & ,
 		      const std::array<double,3> & origin = {0.0,0.0,0.0});
 
   

@@ -262,7 +262,7 @@ array2D<rOc,T>::~array2D() {
 }
 
 template < enum Transform rOc,typename T>
-void array2D<rOc,T>::apply_function(T (*func)(double,double),
+void array2D<rOc,T>::apply_function(T (*func)(double,double,void*),void* params,
 				    const std::array<double,2> & differential,
 				    const std::array<double,2> & origin)
 {
@@ -282,7 +282,7 @@ void array2D<rOc,T>::apply_function(T (*func)(double,double),
 	else
 	  qx = ix * differential[0];
 	
-	(*this)(ix,jy) = func(qx,qy);
+	(*this)(ix,jy) = func(qx,qy,params);
       }
     }
   } else if (rOc == Transform::C2R) {
@@ -297,7 +297,7 @@ void array2D<rOc,T>::apply_function(T (*func)(double,double),
       for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	qx = ix * differential[0];
 	
-	(*this)(ix,jy) = func(qx,qy);
+	(*this)(ix,jy) = func(qx,qy,params);
       }
     }
     
@@ -309,7 +309,7 @@ void array2D<rOc,T>::apply_function(T (*func)(double,double),
       for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	x = ix * differential[0] + origin[0];
 	
-	(*this)(ix,jy) = func(x,y);
+	(*this)(ix,jy) = func(x,y,params);
       }
       
     }

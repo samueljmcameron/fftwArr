@@ -44,7 +44,7 @@ public:
 	  ptrdiff_t, ptrdiff_t);
   array2D(const array2D<rOc,T> &,std::string name = "");
 
-  void apply_function(T (*)(double,double),
+  void apply_function(T (*)(double,double,void*),void*,
 		      const std::array<double,2> & ,
 		      const std::array<double,2> & origin = {0.0,0.0});
 
