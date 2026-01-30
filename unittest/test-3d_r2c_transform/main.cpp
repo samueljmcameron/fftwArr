@@ -151,9 +151,9 @@ int main(int argc, char **argv)
 
 
   if (phi.get_me() == 0)
-    std::cout << "SUCCESSFULLY CALCULATED THE GRADIENT OF FUNCTION "
+    std::cout << "\n\nSUCCESSFULLY CALCULATED THE GRADIENT OF FUNCTION "
 	      << "sin(x)*cos(y)*sin(2*z) USING FOURIER TRANSFORMS "
-	      << "(within an absolute error of " << tolerance << ")."
+	      << "(within an absolute error of " << tolerance << ").\n\n"
 	      << std::endl;
 
 
@@ -161,10 +161,10 @@ int main(int argc, char **argv)
   if (argc > 2)
     save_data = true;
   else
-    std::cout << "To save data for visualisation, add a second "
+    std::cout << "\n\nTo save data for visualisation, add a second "
 	      << "argument to the executable call, e.g. "
 	      << std::string(argv[0]) << std::string(" 1e-4 SAVE")
-	      << std::endl;
+	      << "\n\n" << std::endl;
 
   
   if (save_data)
