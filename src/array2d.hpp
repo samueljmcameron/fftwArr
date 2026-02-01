@@ -36,12 +36,17 @@ private:
   std::unique_ptr<fftwArr::array2D<rOc,T>> fftw_recv; // for I/O
   std::string operation_err_msg(const std::string &,
 				const std::string &);
+
+  enum fftwArr::Transposed transposed;
+
   
 public:
 
   array2D();
   array2D(const MPI_Comm &,std::string,
-	  ptrdiff_t, ptrdiff_t);
+	  ptrdiff_t, ptrdiff_t,
+	  enum Transposed transposed = fftwArr::Transposed::NO);
+
   array2D(const array2D<rOc,T> &,std::string name = "");
 
   void apply_function(T (*)(double,double,void*),void*,
@@ -75,25 +80,29 @@ public:
 
   
 
-  ptrdiff_t Nx() const
+  ptrdiff_t size_axis0() const
   {
     return sizeax[0];
   }
 
-  ptrdiff_t Ny() const
+  ptrdiff_t size_axis1() const
   {
     return sizeax[1];
   }
 
 
-  ptrdiff_t xsize() const
-  /* memory size of x, accounting for array being non-contiguous
-     (i.e. NOT just Nx) */
+  ptrdiff_t spacer_size() const
   {
     return spacer;
   }
   
 
+  bool is_transposed() const
+  {
+    if (transposed == fftwArr::Transposed::YES) return true;
+    else return false;
+  }
+  
   ptrdiff_t get_local0start() const {
     return local_0_start;
   };
@@ -181,6 +190,8 @@ public:
     swap(first.world,second.world);
 
     swap(first.fftw_recv,second.fftw_recv);
+
+    swap(first.transposed,second.transposed);
     
     return;
 
@@ -206,26 +217,45 @@ std::ostream& operator<<(std::ostream& stream,
   
   if (me == 0)
     stream << "Proc\tnx\tny\t" << rhs.get_name() << std::endl;
+  
 
-
-  for (int p = 0; p < nprocs; p++) {
-    if (p == me) {
-      bool firstval = true;
-      for (int ny = 0; ny < rhs.Ny(); ny++)
-	for (int nx = 0; nx < rhs.Nx(); nx++)
-	  if (firstval) {
-	    stream << p << "\t" << nx << "\t"
-		   << ny << "\t" << rhs(nx,ny);
-	    firstval = false;
-	  } else
-	    stream << std::endl << p << "\t" << nx << "\t"
-		   << ny << "\t" << rhs(nx,ny);
+  if (rhs.is_transposed()) {
+    for (int p = 0; p < nprocs; p++) {
+      if (p == me) {
+	bool firstval = true;
+	for (int ix = 0; ix < rhs.size_axis1(); ix++)
+	  for (int jy = 0; jy < rhs.size_axis0(); jy++)
+	    if (firstval) {
+	      stream << p << "\t" << jy << "\t"
+		     << ix << "\t" << rhs(jy,ix);
+	      firstval = false;
+	    } else
+	      stream << std::endl << p << "\t" << jy << "\t"
+		     << ix << "\t" << rhs(jy,ix);
+	
+      }
+      MPI_Barrier(world);
       
     }
-    MPI_Barrier(world);
-    
+  } else {
+    for (int p = 0; p < nprocs; p++) {
+      if (p == me) {
+	bool firstval = true;
+	for (int ny = 0; ny < rhs.size_axis1(); ny++)
+	  for (int nx = 0; nx < rhs.size_axis0(); nx++)
+	    if (firstval) {
+	      stream << p << "\t" << nx << "\t"
+		     << ny << "\t" << rhs(nx,ny);
+	      firstval = false;
+	    } else
+	      stream << std::endl << p << "\t" << nx << "\t"
+		     << ny << "\t" << rhs(nx,ny);
+	
+      }
+      MPI_Barrier(world);
+      
+    }
   }
-  
   return stream;
 }
 

@@ -7,22 +7,36 @@
 namespace fftwArrTestingUtils {
 
 std::string SuccessMessage(const std::string &dtype,
-			   enum fftwArr::Transform rOc,int dim)
+			   enum fftwArr::Transform rOc,int dim,
+			   bool transpose)
 {
- std::string message = "\nTesting for " + std::to_string(dim)
-   + " fftwArr of type " + dtype  + " and " + TransformToString(rOc)
-   + " was succesful.\n" ;
+  std::string message;
+  if (transpose)
+  
+    message = "\nTesting for TRANSPOSED " + std::to_string(dim)
+      + " fftwArr of type " + dtype  + " and " + TransformToString(rOc)
+      + " was succesful.\n" ;
+  else
+    message = "\nTesting for " + std::to_string(dim)
+      + " fftwArr of type " + dtype  + " and " + TransformToString(rOc)
+      + " was succesful.\n" ;
 
  return message;
 }
 
 
 std::string fftwArrName(const std::string &dtype,
-			enum fftwArr::Transform rOc,int dim)
+			enum fftwArr::Transform rOc,int dim,
+			bool transpose)
 {
-
-  return "fftwArr" + std::to_string(dim)  + "D_" + TransformToString(rOc)
-    + "_" + dtype;
+  std::string message;
+  if (transpose)
+    message = "TRANSPOSED_fftwArr" + std::to_string(dim)  + "D_"
+      + TransformToString(rOc) + "_" + dtype;
+  else
+    message = "fftwArr" + std::to_string(dim)  + "D_"
+      + TransformToString(rOc) + "_" + dtype;
+  return message;
 
 }
 

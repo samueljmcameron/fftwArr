@@ -14,7 +14,9 @@ array2D<rOc,T>::array2D()
 
 template < enum Transform rOc,typename T>
 array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
-			 ptrdiff_t Nx, ptrdiff_t Ny)
+			ptrdiff_t Nx, ptrdiff_t Ny,
+			enum Transposed transposed)
+  : transposed(transposed)
 /*
   Constructor for a 2D array with axis sizes (Nx,Ny) (the x dimension
   varies the quickest). The array is not contiguous in memory for different
@@ -118,8 +120,12 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
 {
 
 
+  if (transposed != fftwArr::Transposed::YES &&
+      transposed != fftwArr::Transposed::NO)
+    throw std::runtime_error("Illegal flag passed to array2d.");
+
   ptrdiff_t local_n0;
-  
+
   world = comm;
 
   
@@ -129,40 +135,77 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
 
   // pass axes along so that z varies most slowly, then y, then x
 
+
+  // always for non-transposed state
   global_x_size = Nx;
   global_y_size = Ny;
+
   
   if (rOc == Transform::C2C) {
 
+    if (is_transposed()) {
+      // dummy variables to store useless output
+      ptrdiff_t local_n1, local_1_start;
+      alloc_local
+	= fftw_mpi_local_size_2d_transposed(Ny , Nx,world,
+					    &local_n1,&local_1_start,
+					    &local_n0,&local_0_start);
 
-    alloc_local = fftw_mpi_local_size_2d(Ny , Nx,
-					 world,&local_n0,&local_0_start);
+      sizeax[0] = Ny;
+
+      
+    } else {
+      alloc_local = fftw_mpi_local_size_2d(Ny , Nx,
+					   world,&local_n0,&local_0_start);
+      sizeax[0] = Nx;
+    }
     
     sizeax[1] = local_n0;
-    sizeax[0] = Nx;
+    spacer=sizeax[0];
 
 
     arr = (T*) fftw_alloc_complex(alloc_local);
-    spacer=Nx;
+
     size = alloc_local;
 
     
   } else {
-    alloc_local = fftw_mpi_local_size_2d(Ny , Nx/2 + 1,
-					 world,&local_n0,&local_0_start);
+
+
+    if (is_transposed()) {
+      if (rOc == Transform::R2C)
+	throw std::runtime_error("array3D cannot be transposed if it is "
+				 "r2c");
+      
+      // dummy variables to store useless output
+      ptrdiff_t local_n1, local_1_start;
+      alloc_local
+	= fftw_mpi_local_size_2d_transposed(Ny , Nx/2 + 1,world,
+					    &local_n1,&local_1_start,
+					    &local_n0,&local_0_start);
+
+    } else
+      alloc_local = fftw_mpi_local_size_2d(Ny , Nx/2 + 1,
+					   world,&local_n0,&local_0_start);
     
     sizeax[1] = local_n0;
     
 
     if (typeid(T) == typeid(double)) {
+
+      // no need ot check if tranposed, since it's not allowed for
+      // real arrays.
       sizeax[0] = Nx;
       arr = (T*) fftw_alloc_real(2*alloc_local);
       spacer = 2*(Nx/2+1);    
       size = spacer*alloc_local;
     } else if (typeid(T) == typeid(std::complex<double>)) {
-      sizeax[0] = Nx/2+1;
+      if (is_transposed())
+	sizeax[0] = Ny;
+      else
+	sizeax[0] = Nx/2+1;
       arr = (T*) fftw_alloc_complex(alloc_local);
-      spacer=Nx/2+1;
+      spacer=sizeax[0];
       size = alloc_local;
     } else
       throw std::runtime_error("array2D can only have type double, "
@@ -200,7 +243,8 @@ array2D<rOc,T>::array2D(const array2D<rOc,T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
     global_x_size(base.global_x_size),global_y_size(base.global_y_size),
-    nprocs(base.nprocs),me(base.me),world(base.world)
+    nprocs(base.nprocs),me(base.me),world(base.world),
+    transposed(base.transposed)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the
@@ -270,37 +314,77 @@ void array2D<rOc,T>::apply_function(T (*func)(double,double,void*),void* params,
   if (rOc == Transform::C2C) {
     
     double qx,qy;
+
+    if (is_transposed()) {
+
     
-    for (int jy = 0; jy < sizeax[1]; jy ++ ) {
-      if (jy + local_0_start > global_y_size/2)
-	qy = (-global_y_size + jy + local_0_start ) * differential[1];
-      else
-	qy = ( jy + local_0_start ) * differential[1];
-      for (int ix = 0; ix < sizeax[0]; ix ++ ) {
-	if (ix > global_x_size/2)
-	  qx = (-global_x_size + ix ) * differential[0];
+      for (int ix = 0; ix < sizeax[1]; ix ++ ) {
+	if (ix + local_0_start > global_x_size/2)
+	  qx = (-global_x_size + ix + local_0_start ) * differential[0];
 	else
-	  qx = ix * differential[0];
-	
-	(*this)(ix,jy) = func(qx,qy,params);
+	  qx = ( ix + local_0_start ) * differential[0];
+	for (int jy = 0; jy < sizeax[0]; jy ++ ) {
+	  if (jy > global_y_size/2)
+	    qy = (-global_y_size + jy ) * differential[1];
+	  else
+	    qy = jy * differential[1];
+	  
+	  (*this)(jy,ix) = func(qx,qy,params);
+	}
+      }
+    } else {
+      
+      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	if (jy + local_0_start > global_y_size/2)
+	  qy = (-global_y_size + jy + local_0_start ) * differential[1];
+	else
+	  qy = ( jy + local_0_start ) * differential[1];
+	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	  if (ix > global_x_size/2)
+	    qx = (-global_x_size + ix ) * differential[0];
+	  else
+	    qx = ix * differential[0];
+	  
+	  (*this)(ix,jy) = func(qx,qy,params);
+	}
       }
     }
   } else if (rOc == Transform::C2R) {
     
     double qx, qy;
+
+    if (is_transposed()) {
+      
+      for (int ix = 0; ix < sizeax[1]; ix ++ ) {
+	qx = (ix + local_0_start) * differential[0];
+	for (int jy = 0; jy < sizeax[0]; jy ++ ) {
+	  if (jy > global_y_size/2) 
+	    qy = (-global_y_size + jy ) * differential[1];
+	  else
+	    qy = jy * differential[1];
+	  
+	  
+	  (*this)(jy,ix) = func(qx,qy,params);
+	}
+      }
+
+
+      
+    } else {
     
-    for (int jy = 0; jy < sizeax[1]; jy ++ ) {
-      if (jy + local_0_start > global_y_size/2)
-	qy = (-global_y_size + jy + local_0_start ) * differential[1];
-      else
-	qy = ( jy + local_0_start ) * differential[1];
-      for (int ix = 0; ix < sizeax[0]; ix ++ ) {
-	qx = ix * differential[0];
+      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	if (jy + local_0_start > global_y_size/2) 
+	  qy = (-global_y_size + jy + local_0_start ) * differential[1];
+	else
+	  qy = ( jy + local_0_start ) * differential[1];
 	
-	(*this)(ix,jy) = func(qx,qy,params);
+	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	  qx = ix * differential[0];
+	  
+	  (*this)(ix,jy) = func(qx,qy,params);
+	}
       }
     }
-    
   }  else if (rOc == Transform::R2C) {
     
     double x, y;
@@ -472,7 +556,7 @@ array2D<rOc,T>& array2D<rOc,T>::operator-=(T rhs)
 template < enum Transform rOc,typename T>
 array2D<rOc,T>& array2D<rOc,T>::operator*=(const array2D<rOc,T>& rhs)
 {
-  if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[1] != rhs.size_axis1() || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise multiplication");
     throw std::runtime_error(errmsg);
@@ -490,7 +574,7 @@ template < enum Transform rOc,typename T>
 array2D<rOc,T>& array2D<rOc,T>::operator/=(const array2D<rOc,T>& rhs)
 {
 
-  if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[1] != rhs.size_axis1() || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise division");
     throw std::runtime_error(errmsg.c_str());
@@ -509,7 +593,7 @@ template < enum Transform rOc,typename T>
 array2D<rOc,T>& array2D<rOc,T>::operator+=(const array2D<rOc,T>& rhs)
 {
 
-  if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[1] != rhs.size_axis1() || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise addition");
     throw std::runtime_error(errmsg.c_str());
@@ -528,7 +612,7 @@ template < enum Transform rOc,typename T>
 array2D<rOc,T>& array2D<rOc,T>::operator-=(const array2D<rOc,T>& rhs)
 {
 
-  if (Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[1] != rhs.size_axis1() || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise subtraction");
     throw std::runtime_error(errmsg.c_str());
@@ -561,11 +645,17 @@ void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
 
   int recvid, sendid;
 
+  int gsize;
+
+  if (is_transposed())
+    gsize = global_y_size;
+  else
+    gsize = global_x_size;
   if (!fftw_recv && overlap)
     fftw_recv
       = std::make_unique<array2D<rOc,T>>(world,array_name
 				     +std::string("_neighborplane"),
-				     global_x_size,nprocs);
+				     gsize,nprocs);
 
 
 
@@ -604,15 +694,15 @@ void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
 
 
 
-    MPI_Sendrecv(&(*this)(0,sizeax[1]-1),this->xsize(),
+    MPI_Sendrecv(&(*this)(0,sizeax[1]-1),this->spacer_size(),
 		 MPI_DOUBLE,sendid,0,
-		 fftw_recv->data(),fftw_recv->xsize(),
+		 fftw_recv->data(),fftw_recv->spacer_size(),
 		 MPI_DOUBLE,recvid,0,world,MPI_STATUS_IGNORE);
 
     if (me != 0)
 
       myfile.write((char*)&(*fftw_recv)(0,0),
-		   sizeof(T)*fftw_recv->Nx());
+		   sizeof(T)*fftw_recv->size_axis0());
 
   }
 
@@ -637,15 +727,15 @@ void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
     }
     
     
-    MPI_Sendrecv(&(*this)(0,0),this->xsize(),
+    MPI_Sendrecv(&(*this)(0,0),this->spacer_size(),
 		 MPI_DOUBLE,sendid,0,
-		 fftw_recv->data(),fftw_recv->xsize(),
+		 fftw_recv->data(),fftw_recv->spacer_size(),
 		 MPI_DOUBLE,recvid,0,world,MPI_STATUS_IGNORE);
 
   
   if (me != nprocs-1)
     myfile.write((char*)&(*fftw_recv)(0,0),
-		 sizeof(T)*fftw_recv->Nx());  
+		 sizeof(T)*fftw_recv->size_axis0());  
 
   }
 

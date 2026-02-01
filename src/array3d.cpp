@@ -14,7 +14,9 @@ array3D<rOc,T>::array3D()
 
 template < enum Transform rOc,typename T>
 array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
-			ptrdiff_t Nx, ptrdiff_t Ny, ptrdiff_t Nz)
+			ptrdiff_t Nx, ptrdiff_t Ny, ptrdiff_t Nz,
+			enum Transposed transposed)
+  : transposed(transposed)
 /*
   Constructor for a 3D array with axis sizes (Nx,Ny,Nz) (the x dimension
   varies the quickest). The array is not contiguous in memory for different
@@ -127,6 +129,11 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
 {
 
 
+
+  if (transposed != fftwArr::Transposed::YES
+      && transposed != fftwArr::Transposed::NO)
+    throw std::runtime_error("Illegal flag passed to array3d.");
+  
   ptrdiff_t local_n0;
   
   world = comm;
@@ -139,16 +146,32 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
 
 
   global_x_size = Nx;
+  global_y_size = Ny;
   global_z_size = Nz;
   
   if (rOc == Transform::C2C) {
-    
 
-    alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx,
-					 world,&local_n0,&local_0_start);
+
+    if (is_transposed()) {
+      // dummy variables to store useless output
+      ptrdiff_t local_n1, local_1_start;
+      alloc_local
+	= fftw_mpi_local_size_3d_transposed(Nz, Ny , Nx,world,
+					    &local_n1,&local_1_start,
+					    &local_n0,&local_0_start);
+      sizeax[1] = Nz;
+      
+    } else {
+      alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx,world,
+					   &local_n0,&local_0_start);
+
+      sizeax[1] = Ny;
+    }
+
     
     sizeax[2] = local_n0;
-    sizeax[1] = Ny;
+
+
     sizeax[0]= Nx;
 
     arr = (T*) fftw_alloc_complex(alloc_local);
@@ -157,14 +180,28 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
     
 
   } else {
-    alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx/2 + 1,
-					 world,&local_n0,&local_0_start);
-  
+
+    if (is_transposed()) {
+      if (rOc == Transform::R2C)
+	throw std::runtime_error("array3D cannot be transposed if it is "
+				 "r2c");
+      
+      // dummy variables to store useless output
+      ptrdiff_t local_n1, local_1_start;
+      alloc_local
+	= fftw_mpi_local_size_3d_transposed(Nz, Ny , Nx/2 + 1,world,
+					    &local_n1,&local_1_start,
+					    &local_n0,&local_0_start);
+      sizeax[1] = Nz;
+    } else {
+      alloc_local = fftw_mpi_local_size_3d(Nz, Ny , Nx/2 + 1,
+					   world,&local_n0,&local_0_start);
+      sizeax[1] = Ny;
+    }
     sizeax[2] = local_n0;
-    sizeax[1] = Ny;
 
     
-        
+    
     if (typeid(T) == typeid(double)) {
       sizeax[0] = Nx;
       arr = (T*) fftw_alloc_real(2*alloc_local);
@@ -211,7 +248,9 @@ array3D<rOc,T>::array3D(const array3D<rOc,T> & base,std::string name)
   : alloc_local(base.alloc_local),local_0_start(base.local_0_start),
     size(base.size),array_name(base.array_name), spacer(base.spacer),
     global_x_size(base.global_x_size),global_z_size(base.global_z_size),
-    nprocs(base.nprocs),me(base.me),world(base.world)
+    global_y_size(base.global_y_size),
+    nprocs(base.nprocs),me(base.me),world(base.world),
+    transposed(base.transposed)
 /*
   Copy array, but if name (other than "") is provided then only make an
   array of the same size with the new name, but don't copy the elements in the
@@ -278,51 +317,100 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double,void *),
 				    const std::array<double,3> & origin)
 {
 
-  ptrdiff_t global_y_size = sizeax[1];
+
   if (rOc == Transform::C2C) {
 
     double qx,qy,qz;
-
-    for (int kz = 0; kz < sizeax[2]; kz ++) {
-      if (kz + local_0_start > global_z_size/2)
-	qz = (-global_z_size + kz + local_0_start ) * differential[2];
-      else
-	qz = ( kz + local_0_start ) * differential[2];
-      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
-	if (jy > global_y_size/2)
-	  qy = (-global_y_size + jy ) * differential[1];
+    
+    if (is_transposed()) {
+      for (int jy = 0; jy < sizeax[2]; jy ++) {
+	if (jy + local_0_start > global_y_size/2)
+	  qy = (-global_y_size + jy + local_0_start ) * differential[2];
 	else
-	  qy =  jy * differential[1];
-	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
-	  if (ix > global_x_size/2)
-	    qx = (-global_x_size + ix ) * differential[0];
+	  qy = ( jy + local_0_start ) * differential[2];
+	for (int kz = 0; kz < sizeax[1]; kz ++ ) {
+	  if (kz > global_z_size/2)
+	    qz = (-global_z_size + kz ) * differential[1];
 	  else
-	    qx = ix * differential[0];
-	  
-	  (*this)(ix,jy,kz) = func(qx,qy,qz,params);
-	  
+	    qz =  kz * differential[1];
+	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	    if (ix > global_x_size/2)
+	      qx = (-global_x_size + ix ) * differential[0];
+	    else
+	      qx = ix * differential[0];
+	    
+	    (*this)(ix,kz,jy) = func(qx,qy,qz,params);
+	    
+	  }
+	}
+      }
+      
+    } else {
+      
+      for (int kz = 0; kz < sizeax[2]; kz ++) {
+	if (kz + local_0_start > global_z_size/2)
+	  qz = (-global_z_size + kz + local_0_start ) * differential[2];
+	else
+	  qz = ( kz + local_0_start ) * differential[2];
+	for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	  if (jy > global_y_size/2)
+	    qy = (-global_y_size + jy ) * differential[1];
+	  else
+	    qy =  jy * differential[1];
+	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	    if (ix > global_x_size/2)
+	      qx = (-global_x_size + ix ) * differential[0];
+	    else
+	      qx = ix * differential[0];
+	    
+	    (*this)(ix,jy,kz) = func(qx,qy,qz,params);
+	    
+	  }
 	}
       }
     }
+
   } else if (rOc == Transform::C2R) {
     
     double qx,qy,qz;
 
-    for (int kz = 0; kz < sizeax[2]; kz ++) {
-      if (kz + local_0_start > global_z_size/2)
-	qz = (-global_z_size + kz + local_0_start ) * differential[2];
-      else
-	qz = ( kz + local_0_start ) * differential[2];
-      for (int jy = 0; jy < sizeax[1]; jy ++ ) {
-	if (jy > global_y_size/2)
-	  qy = (-global_y_size + jy ) * differential[1];
+
+    if (is_transposed()) {
+      for (int jy = 0; jy < sizeax[2]; jy ++) {
+	if (jy + local_0_start > global_y_size/2)
+	  qy = (-global_y_size + jy + local_0_start ) * differential[2];
 	else
-	  qy =  jy * differential[1];
-	for (int ix = 0; ix < sizeax[0]; ix ++ ) {
-	  qx = ix * differential[0];
-	  
-	  (*this)(ix,jy,kz) = func(qx,qy,qz,params);
-	  
+	  qy = ( jy + local_0_start ) * differential[2];
+	for (int kz = 0; kz < sizeax[1]; kz ++ ) {
+	  if (kz > global_z_size/2)
+	    qz = (-global_z_size + kz ) * differential[1];
+	  else
+	    qz =  kz * differential[1];
+	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	    qx = ix * differential[0];
+	    
+	    (*this)(ix,kz,jy) = func(qx,qy,qz,params);
+	    
+	  }
+	}
+      }
+    } else {
+      for (int kz = 0; kz < sizeax[2]; kz ++) {
+	if (kz + local_0_start > global_z_size/2)
+	  qz = (-global_z_size + kz + local_0_start ) * differential[2];
+	else
+	  qz = ( kz + local_0_start ) * differential[2];
+	for (int jy = 0; jy < sizeax[1]; jy ++ ) {
+	  if (jy > global_y_size/2)
+	    qy = (-global_y_size + jy ) * differential[1];
+	  else
+	    qy =  jy * differential[1];
+	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
+	    qx = ix * differential[0];
+	    
+	    (*this)(ix,jy,kz) = func(qx,qy,qz,params);
+	    
+	  }
 	}
       }
     }
@@ -512,7 +600,8 @@ template < enum Transform rOc,typename T>
 array3D<rOc,T>& array3D<rOc,T>::operator*=(const array3D<rOc,T>& rhs)
 {
 
-  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[2] != rhs.size_axis2() || sizeax[1] != rhs.size_axis1()
+      || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise multiplication");
     throw std::runtime_error(errmsg);
@@ -532,7 +621,8 @@ template < enum Transform rOc,typename T>
 array3D<rOc,T>& array3D<rOc,T>::operator/=(const array3D<rOc,T>& rhs)
 {
 
-  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[2] != rhs.size_axis2() || sizeax[1] != rhs.size_axis1()
+      || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise division");
     throw std::runtime_error(errmsg.c_str());
@@ -553,7 +643,8 @@ template < enum Transform rOc,typename T>
 array3D<rOc,T>& array3D<rOc,T>::operator+=(const array3D<rOc,T>& rhs)
 {
 
-  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[2] != rhs.size_axis2() || sizeax[1] != rhs.size_axis1()
+      || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise addition");
     throw std::runtime_error(errmsg.c_str());
@@ -574,7 +665,8 @@ template < enum Transform rOc,typename T>
 array3D<rOc,T>& array3D<rOc,T>::operator-=(const array3D<rOc,T>& rhs)
 {
 
-  if (Nz() != rhs.Nz() || Ny() != rhs.Ny() || Nx() != rhs.Nx()) {
+  if (sizeax[2] != rhs.size_axis2() || sizeax[1] != rhs.size_axis1()
+      || sizeax[0] != rhs.size_axis0()) {
     std::string errmsg
       = operation_err_msg(rhs.get_name(),"Element-wise subtraction");
     throw std::runtime_error(errmsg.c_str());
@@ -652,16 +744,16 @@ void array3D<rOc,T>::write_to_binary(std::fstream &myfile,
 
 
 
-    MPI_Sendrecv(&(*this)(0,0,sizeax[2]-1),this->xysize(),
+    MPI_Sendrecv(&(*this)(0,0,sizeax[2]-1),this->plane_size(),
 		 MPI_DOUBLE,sendid,0,
-		 fftw_recv->data(),fftw_recv->xysize(),
+		 fftw_recv->data(),fftw_recv->plane_size(),
 		 MPI_DOUBLE,recvid,0,world,MPI_STATUS_IGNORE);
 
     if (me != 0)
 
-      for (int ny = 0; ny < fftw_recv->Ny(); ny++)
+      for (int ny = 0; ny < fftw_recv->size_axis1(); ny++)
 	myfile.write((char*)&(*fftw_recv)(0,ny,0),
-		     sizeof(T)*fftw_recv->Nx());
+		     sizeof(T)*fftw_recv->size_axis0());
 
   }
 
@@ -687,16 +779,16 @@ void array3D<rOc,T>::write_to_binary(std::fstream &myfile,
     }
     
     
-    MPI_Sendrecv(&(*this)(0,0,0),this->xysize(),
+    MPI_Sendrecv(&(*this)(0,0,0),this->plane_size(),
 		 MPI_DOUBLE,sendid,0,
-		 fftw_recv->data(),fftw_recv->xysize(),
+		 fftw_recv->data(),fftw_recv->plane_size(),
 		 MPI_DOUBLE,recvid,0,world,MPI_STATUS_IGNORE);
 
   
   if (me != nprocs-1)
-    for (int ny = 0; ny < fftw_recv->Ny(); ny++)
+    for (int ny = 0; ny < fftw_recv->size_axis1(); ny++)
       myfile.write((char*)&(*fftw_recv)(0,ny,0),
-		   sizeof(T)*fftw_recv->Nx());  
+		   sizeof(T)*fftw_recv->size_axis0());  
 
   }
 
@@ -785,72 +877,3 @@ std::string array3D<rOc,T>::operation_err_msg(const std::string & othername,
 template class fftwArr::array3D<fftwArr::Transform::R2C,double>;
 template class fftwArr::array3D<fftwArr::Transform::C2R,std::complex<double>>;
 template class fftwArr::array3D<fftwArr::Transform::C2C,std::complex<double>>;
-/*
-template < enum Transform rOc,typename T>
-void array3D<rOc,T>::abs(array3D& modulus) const
-{
-
-
-    
-  if (Nz() != modulus.Nz() || Ny() != modulus.Ny() || Nx() != modulus.Nx())
-      throw std::runtime_error("Cannot take abs of array3D (wrong output shape).");
-
-
-
-  for (int nz = 0; nz < sizeax[2]; nz++) {
-    for (int ny = 0; ny < sizeax[1]; ny++) {
-      for (int nx = 0; nx < sizeax[0]; nx++) {
-	modulus(nx,ny,nz) = std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
-      }
-    }
-  }
-  return;
-
-}
-
-
-template < enum Transform rOc,typename T>
-void array3D<rOc,T>::modSq(array3D& modulus) const
-{
-
-
-  if (Nz() != modulus.Nz() || Ny() != modulus.Ny() || Nx() != modulus.Nx())  
-    throw std::runtime_error("Cannot take abs of array3D (wrong output shape).");
-
-
-
-  for (int nz = 0; nz < sizeax[2]; nz++) {
-    for (int ny = 0; ny < sizeax[1]; ny++) {
-      for (int nx = 0; nx < sizeax[0]; nx++) {
-	modulus(nx,ny,nz) = std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer])
-	  *std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
-      }
-    }
-  }
-  return;
-
-}
-
-
-
-template < enum Transform rOc,typename T>
-void array3D<rOc,T>::running_modSq(array3D& modulus) const
-{
-
-  if (Nz() != modulus.Nz() || Ny() != modulus.Ny() || Nx() != modulus.Nx())  
-    throw std::runtime_error("Cannot take abs of array3D (wrong output shape).");
-
-
-  for (int nz = 0; nz < sizeax[2]; nz++) {
-    for (int ny = 0; ny < sizeax[1]; ny++) {
-      for (int nx = 0; nx < sizeax[0]; nx++) {
-	modulus(nx,ny,nz) += std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer])
-	  *std::abs(arr[nx + (nz*sizeax[1] + ny ) * spacer]);
-      }
-    }
-  }
-  return;
-
-}
-
-*/

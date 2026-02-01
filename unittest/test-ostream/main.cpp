@@ -9,7 +9,22 @@
 #include "fftw_arr_testing_utils/utils.hpp"
 
 template < enum fftwArr::Transform rOc, typename T>
-void test_function(MPI_Comm ,int );
+void test_function(MPI_Comm ,int , enum fftwArr::Transposed);
+
+template <typename T>
+T func_2d(double x, double y, void *obj)
+{
+  return  x+y+ 0.4;
+}
+
+template <typename T>
+T func_3d(double x, double y, double z,void *obj)
+{
+  return  x+y+z+ 0.4;
+}
+
+
+
 
 int main()
 {
@@ -38,13 +53,26 @@ int main()
 
   for (int dim = 2; dim <=3 ; dim ++) {
   
-    test_function<fftwArr::Transform::R2C,double>(world,dim);
+    test_function<
+      fftwArr::Transform::R2C,double>(world,dim,
+				      fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2R,std::complex<double>>(world,dim);
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>>(world,dim,
+						    fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2C,std::complex<double>>(world,dim);
-
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>>(world,dim,
+						    fftwArr::Transposed::YES);
     
+
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>>(world,dim,
+						    fftwArr::Transposed::NO);
+
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>>(world,dim,
+						    fftwArr::Transposed::YES);    
     
   }
   
@@ -65,7 +93,8 @@ int main()
 
 
 template < enum fftwArr::Transform rOc,typename T>
-void test_function(MPI_Comm world,int dim)
+void test_function(MPI_Comm world,int dim,
+		   enum fftwArr::Transposed transpose)
 {
 
   std::unique_ptr<fftwArr::array2D<rOc,T>> phi_2d;
@@ -76,6 +105,8 @@ void test_function(MPI_Comm world,int dim)
 
   int me;
   MPI_Comm_rank(world,&me);
+
+  bool is_transposed;
   
   
   std::string dtype = fftwArrTestingUtils::TypeToString(typeid(T).name());
@@ -87,11 +118,14 @@ void test_function(MPI_Comm world,int dim)
     int Ny = 9;
     
     
-    phi_2d = std::make_unique<fftwArr::array2D<rOc,T>>(world,"phi_2d",Nx,Ny);
+    phi_2d
+      = std::make_unique<fftwArr::array2D<rOc,T>>(world,"phi_2d",Nx,Ny,
+						  transpose);
+
+    is_transposed = phi_2d->is_transposed();
+
+    phi_2d->apply_function(func_2d<T>,nullptr,{1.0,1.0});
     
-    for (int ny = 0; ny < phi_2d->Ny(); ny++)
-      for (int nx = 0; nx < phi_2d->Nx(); nx++)
-	(*phi_2d)(nx,ny) = nx+ny + 0.4;
     
     std::cout << *phi_2d << std::endl;
     
@@ -101,21 +135,26 @@ void test_function(MPI_Comm world,int dim)
     int Ny = 2;
     int Nz = 10;
     
-    phi_3d = std::make_unique<fftwArr::array3D<rOc,T>>(world,"phi_3d",Nx,Ny,Nz);
+    phi_3d
+      = std::make_unique<fftwArr::array3D<rOc,T>>(world,"phi_3d",
+						  Nx,Ny,Nz,
+						  transpose);
 
-    
-    for (int nz = 0; nz < phi_3d->Nz(); nz++)
-      for (int ny = 0; ny < phi_3d->Ny(); ny++)
-	for (int nx = 0; nx < phi_3d->Nx(); nx++)
-	  (*phi_3d)(nx,ny,nz) = nx+ny+nz + 0.4;
-    
-    
+
+
+    is_transposed = phi_3d->is_transposed();
+
+
+
+    phi_3d->apply_function(func_3d<T>,nullptr,{1.0,1.0,1.0});
     
     std::cout << *phi_3d << std::endl;
 
   }
   if (me == 0)
-    std::cout << "SUCCESS: " + fftwArrTestingUtils::fftwArrName(dtype,rOc,dim) << std::endl;
+    std::cout << "SUCCESS: "
+	      << fftwArrTestingUtils::fftwArrName(dtype,rOc,dim,
+						  is_transposed)
+	      << std::endl;
 
 }
-

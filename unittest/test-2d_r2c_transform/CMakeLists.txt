@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArrExample VERSION 1.0 DESCRIPTION "testing 3D fft using fftw3 on fftwArr"
+project(fftwArrExample VERSION 1.0 DESCRIPTION "testing 2D fft using fftw3 on fftwArr"
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -52,9 +52,9 @@ MESSAGE(STATUS "FFTWARRTESTINGUTILS_LIBRARIES::" ${FFTWARRTESTINGUTILS_LIBRARIES
 
 
 
-add_executable(test-3d_r2c_transform main.cpp)
+add_executable(test-2d_r2c_transform main.cpp)
 
-target_link_libraries(test-3d_r2c_transform PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
+target_link_libraries(test-2d_r2c_transform PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})

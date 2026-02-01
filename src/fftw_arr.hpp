@@ -5,6 +5,8 @@ namespace fftwArr {
 
   enum Transform {R2C,C2R,C2C};
 
+  enum Transposed {NO,YES};
+
   
 };
 #endif

@@ -27,7 +27,7 @@ private:
   ptrdiff_t size;
   int nprocs,me;
 
-  ptrdiff_t global_x_size,global_z_size; 
+  ptrdiff_t global_x_size,global_y_size,global_z_size; 
   std::array<ptrdiff_t,3> sizeax; // local axis sizes of the array {nx,ny,nz} 
   
   std::string array_name;
@@ -38,13 +38,15 @@ private:
   std::string operation_err_msg(const std::string &,
 				const std::string &);
 
+  enum fftwArr::Transposed transposed;
   
 public:
 
   array3D();
 
   array3D(const MPI_Comm &,std::string,
-	  ptrdiff_t, ptrdiff_t, ptrdiff_t);
+	  ptrdiff_t, ptrdiff_t, ptrdiff_t,
+	  enum Transposed transposed = fftwArr::Transposed::NO);
   array3D(const array3D<rOc,T> &,std::string name = "");
 
 
@@ -77,11 +79,7 @@ public:
 
   
   ptrdiff_t global_Ny() const {
-    /*
-      you don't need a "get global y size" since it
-       is always given by Ny(), but I'm including it here.
-    */
-    return sizeax[1];
+    return global_y_size;
   }
 
   
@@ -90,30 +88,37 @@ public:
   }
   
   
-  ptrdiff_t Nx() const
+  ptrdiff_t size_axis0() const
   {
     return sizeax[0];
   }
 
-  ptrdiff_t Ny() const
+  ptrdiff_t size_axis1() const
   {
     return sizeax[1];
   }
 
-  ptrdiff_t Nz() const
+  ptrdiff_t size_axis2() const
   {
     return sizeax[2];
   }
 
 
-  ptrdiff_t xysize() const
-  /* memory size of xy combined, accounting for array being non-contiguous
-     (i.e. NOT just Nx*Ny) */
+  ptrdiff_t plane_size() const
+  /* memory size of first two axes combined, accounting for array being non-contiguous
+     (i.e. NOT just sizeax[0]*sizeax[1]) */
   {
     return sizeax[1]*spacer;
   }
   
 
+
+  bool is_transposed() const
+  {
+    if (transposed == fftwArr::Transposed::YES) return true;
+    else return false;
+  }
+  
   ptrdiff_t get_local0start() const {
     return local_0_start;
   };
@@ -191,6 +196,7 @@ public:
     swap(first.me,second.me);
 
     swap(first.global_z_size,second.global_z_size);
+    swap(first.global_y_size,second.global_y_size);
     swap(first.global_x_size,second.global_x_size);
 
     swap(first.sizeax,second.sizeax);
@@ -202,6 +208,8 @@ public:
     swap(first.world,second.world);
 
     swap(first.fftw_recv,second.fftw_recv);
+
+    swap (first.transposed,second.transposed);
 
     return;
 
@@ -229,26 +237,49 @@ std::ostream& operator<<(std::ostream& stream,
     stream << "Proc\tnx\tny\tnz\t" << rhs.get_name() << std::endl;
 
 
-  for (int p = 0; p < nprocs; p++) {
-    if (p == me) {
-      bool firstval = true;
-      for (int nz = 0; nz < rhs.Nz(); nz++)
-	for (int ny = 0; ny < rhs.Ny(); ny++)
-	  for (int nx = 0; nx < rhs.Nx(); nx++)
-	    if (firstval) {
-	      stream << p << "\t" << nx << "\t"
-		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
-	      firstval = false;
-	    } else
-	      stream << std::endl << p << "\t" << nx << "\t"
-		     << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
+  if (rhs.is_transposed()) {
+
+    for (int p = 0; p < nprocs; p++) {
+      if (p == me) {
+	bool firstval = true;
+	for (int jy = 0; jy < rhs.size_axis2(); jy++)
+	  for (int kz = 0; kz < rhs.size_axis1(); kz++)
+	    for (int ix = 0; ix < rhs.size_axis0(); ix++)
+	      if (firstval) {
+		stream << p << "\t" << ix << "\t"
+		       << kz << "\t" << jy << "\t" << rhs(ix,kz,jy);
+		firstval = false;
+	      } else
+		stream << std::endl << p << "\t" << ix << "\t"
+		       << kz << "\t" << jy << "\t" << rhs(ix,kz,jy);
+	
+      }
+      MPI_Barrier(world);
       
     }
-    MPI_Barrier(world);
+  } else {
+
+    for (int p = 0; p < nprocs; p++) {
+      if (p == me) {
+	bool firstval = true;
+	for (int nz = 0; nz < rhs.size_axis2(); nz++)
+	  for (int ny = 0; ny < rhs.size_axis1(); ny++)
+	    for (int nx = 0; nx < rhs.size_axis0(); nx++)
+	      if (firstval) {
+		stream << p << "\t" << nx << "\t"
+		       << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
+		firstval = false;
+	      } else
+		stream << std::endl << p << "\t" << nx << "\t"
+		       << ny << "\t" << nz << "\t" << rhs(nx,ny,nz);
+	
+      }
+      MPI_Barrier(world);
+      
+    }
     
   }
-  
-  return stream;
+    return stream;
 }
 
 #endif
