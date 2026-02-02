@@ -9,17 +9,18 @@
 #include "fftw_arr/arrays.hpp"
 #include "fftw_arr_testing_utils/utils.hpp"
 
-double func_phi(double ,double,void * );
-double func_gradphi_x(double,double,void *);
-double func_gradphi_y(double,double,void *);
+double func_phi(double ,double ,double,void * );
+double func_gradphi_x(double,double,double,void *);
+double func_gradphi_y(double,double,double,void *);
+double func_gradphi_z(double,double,double,void *);
 
-void initialize_gradphi(std::array<fftwArr::r2c_2D,2> &,double);
+void initialize_gradphi(std::array<fftwArr::r2c_3D,3> &,double);
 
-void compute_gradients(std::array<fftwArr::c2r_2D,2> &,
-		       const fftwArr::c2r_2D &,
+void compute_gradients(std::array<fftwArr::c2r_3D,3> &,
+		       const fftwArr::c2r_3D &,
 		       double); 
-void save_outputs(const fftwArr::r2c_2D &,
-		  const std::array<fftwArr::r2c_2D,2> &,
+void save_outputs(const fftwArr::r2c_3D &,
+		  const std::array<fftwArr::r2c_3D,3> &,
 		  double);
 
 int main(int argc, char **argv)
@@ -27,12 +28,13 @@ int main(int argc, char **argv)
   
   double tolerance;
   int numcalls;
+
   try {
     tolerance = std::stod(argv[1]);
   } catch (const std::logic_error &e) {
     throw std::runtime_error("Need to input a tolerance for the calculation"
 			     + std::string(", e.g. ")
-			     + std::string(argv[0]) + std::string(" 1e-4"));
+			     + std::string(argv[0]) + std::string(" 1e-4 1000"));
   }
 
   try {
@@ -50,13 +52,12 @@ int main(int argc, char **argv)
   fftw_mpi_init();
 
   int Nx = 40;
-  int Ny = 20;
-
+  int Ny = 34;
+  int Nz = 20;
   double L = 2*M_PI;
 
-  std::array<double,2> differentials = {L/Nx,L/Ny};
-  std::array<double,2> origin = {0.0,0.0};
-  
+  std::array<double,3> differentials = {L/Nx,L/Ny,L/Nz};
+  std::array<double,3> origin = {0.0,0.0,0.0};
 
   std::array<enum fftwArr::Transposed,2>
     transposers = {fftwArr::Transposed::NO,
@@ -65,31 +66,33 @@ int main(int argc, char **argv)
   for (auto & transpose : transposers) {
   
     // define the array to be transform, phi(x,y,z), in both real and fourier space
-    fftwArr::r2c_2D phi(MPI_COMM_WORLD,"phi",Nx,Ny);
+    fftwArr::r2c_3D phi(MPI_COMM_WORLD,"phi",Nx,Ny,Nz);
     
     
-    fftwArr::c2r_2D ft_phi(MPI_COMM_WORLD,"ft_phi",Nx,Ny,
+    fftwArr::c2r_3D ft_phi(MPI_COMM_WORLD,"ft_phi",Nx,Ny,Nz,
 			   transpose);
     
     // define arrays to hold the gradients in both real and fourier space
-    std::array<fftwArr::r2c_2D,2> gradphi;
-    std::array<fftwArr::c2r_2D,2> ft_gradphi;
+    std::array<fftwArr::r2c_3D,3> gradphi;
+    std::array<fftwArr::c2r_3D,3> ft_gradphi;
     
-    std::array<fftwArr::r2c_2D,2> errors_gradphi;
+    std::array<fftwArr::r2c_3D,3> errors_gradphi;
     
-    std::array<std::string,2> xy = {"x","y"};
+    std::array<std::string,3> xyz = {"x","y","z"};
     
-    for (int dim = 0; dim < 2; dim++) {
+    for (int dim = 0; dim < 3; dim++) {
       gradphi[dim]
-	= fftwArr::r2c_2D(MPI_COMM_WORLD,"gradphi_"+xy[dim],Nx,Ny);
+	= fftwArr::r2c_3D(MPI_COMM_WORLD,"gradphi_"+xyz[dim],
+			  Nx,Ny,Nz);
       ft_gradphi[dim]
-	= fftwArr::c2r_2D(MPI_COMM_WORLD,"ft_gradphi_"+xy[dim],Nx,Ny,
-			  transpose);
+	= fftwArr::c2r_3D(MPI_COMM_WORLD,"ft_gradphi_"+xyz[dim],
+			  Nx,Ny,Nz,transpose);
       errors_gradphi[dim]
-	= fftwArr::r2c_2D(MPI_COMM_WORLD,"errors_"+xy[dim],Nx,Ny);
+	= fftwArr::r2c_3D(MPI_COMM_WORLD,"errors_"+xyz[dim],
+			  Nx,Ny,Nz);
       
     }
-    
+
     int forward_pflags, backward_pflags;
     
     if (transpose == fftwArr::Transposed::YES) {
@@ -99,35 +102,31 @@ int main(int argc, char **argv)
       forward_pflags = FFTW_MEASURE;
       backward_pflags = FFTW_MEASURE;
     }
-    
-    
-    
-    
+
+
     // boiler plate fftw3 stuff here
-    
     fftw_plan forward_phi
-      = fftw_mpi_plan_dft_r2c_2d(Ny,Nx,phi.data(),
+      = fftw_mpi_plan_dft_r2c_3d(Nz,Ny,Nx,phi.data(),
 				 reinterpret_cast<fftw_complex*>
 				 (ft_phi.data()),
 				 MPI_COMM_WORLD,forward_pflags);
+
+    std::array<fftw_plan,3> backward_gradphi;    
     
-    
-    std::array<fftw_plan,2> backward_gradphi;
-    
-    
-    for (int dim = 0; dim < 2; dim++)
+    for (int dim = 0; dim < 3; dim++)
       backward_gradphi[dim]
-	= fftw_mpi_plan_dft_c2r_2d(Ny,Nx,
+	= fftw_mpi_plan_dft_c2r_3d(Nz,Ny,Nx,
 				   reinterpret_cast<fftw_complex*>
 				   (ft_gradphi[dim].data()),
-				   gradphi[dim].data(),MPI_COMM_WORLD,
+				   gradphi[dim].data(),
+				   MPI_COMM_WORLD,
 				   backward_pflags);
-    
-    
+
+
     std::chrono::steady_clock::time_point const
       time_start{std::chrono::steady_clock::now()};
     
-    
+
     for (int call = 0; call < numcalls; call++) {
       // initialise data for phi and compute fourier transform
       phi.apply_function(func_phi,nullptr,differentials,origin);
@@ -135,18 +134,15 @@ int main(int argc, char **argv)
       
       // compute gradients in fourier space
       compute_gradients(ft_gradphi,ft_phi,L);
-      //compute_gradients(ft_gradphi,ft_phi,L,Nx,Ny);
-      
       // inverse fourier transform to get gradients in real space
       
-      for (int dim = 0; dim < 2; dim++) {
+      for (int dim = 0; dim < 3; dim++) {
 	fftw_execute(backward_gradphi[dim]);
       }
-      for (int dim = 0; dim < 2; dim++) {
-	gradphi[dim] /= Nx*Ny;
+      for (int dim = 0; dim < 3; dim++) {
+	gradphi[dim] /= Nx*Ny*Nz;
       }
     }
-    
     
     std::chrono::steady_clock::time_point const
       time_end{std::chrono::steady_clock::now()};
@@ -157,13 +153,14 @@ int main(int argc, char **argv)
     double const latency{time_elapsed /
 			 static_cast<double>(numcalls)};
     
-    
+
     double global_latency;
     MPI_Allreduce(&latency, &global_latency, 1,
 		  MPI_DOUBLE, MPI_SUM,
 		  phi.get_world());
     
     global_latency /= phi.get_nprocs();
+    
     
     
     // compute analytic form of gradient, store in errors for now
@@ -174,23 +171,25 @@ int main(int argc, char **argv)
     errors_gradphi[1].apply_function(func_gradphi_y,nullptr,
 				     differentials,origin);
     
+    errors_gradphi[2].apply_function(func_gradphi_z,nullptr,
+				     differentials,origin);
+    
     
     // subtract the computed gradients from the analytic gradients
     
-    for (int dim = 0; dim < 2; dim++)
+    for (int dim = 0; dim < 3; dim++)
       errors_gradphi[dim] -= gradphi[dim];
     
     int global_flag;
     
     int local_flag;
-    for (int dim = 0; dim < 2; dim++)
+    for (int dim = 0; dim < 3; dim++)
       local_flag
-	= fftwArrTestingUtils::all_zero_2d(errors_gradphi[dim],tolerance);
+	= fftwArrTestingUtils::all_zero_3d(errors_gradphi[dim],tolerance);
     
     
     MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT, MPI_SUM,
 		  phi.get_world());
-    
     
     if (global_flag) {
       std::string error_message
@@ -202,7 +201,7 @@ int main(int argc, char **argv)
       throw std::runtime_error(error_message);
     }
     
-
+    
     if (phi.get_me() == 0) {
       if (transpose == fftwArr::Transposed::YES) {
 
@@ -221,11 +220,13 @@ int main(int argc, char **argv)
 		  << std::endl;
 
       }
-
     }
+    
+    
+    
     fftw_destroy_plan(forward_phi);
     
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
       fftw_destroy_plan(backward_gradphi[i]);
     }
     
@@ -238,29 +239,36 @@ int main(int argc, char **argv)
   return 0;
 }
 
-double func_phi(double x,double y,void *obj)
+double func_phi(double x,double y,double z,void *obj)
 {
-  return sin(x)*cos(y);
+  return sin(x)*cos(y)*sin(2*z);
 }
 
-double func_gradphi_x(double x, double y,void *obj)
+double func_gradphi_x(double x, double y, double z, void *obj)
 {
 
-  return cos(x)*cos(y);
-
-}
-
-double func_gradphi_y(double x, double y,void *obj)
-{
-
-  return -sin(x)*sin(y);
+  return cos(x)*cos(y)*sin(2*z);
 
 }
 
+double func_gradphi_y(double x, double y, double z, void *obj)
+{
+
+  return -sin(x)*sin(y)*sin(2*z);
+
+}
 
 
-void save_outputs(const fftwArr::r2c_2D &phi,
-		  const std::array<fftwArr::r2c_2D,2> &gradphi,
+double func_gradphi_z(double x, double y, double z,void *obj)
+{
+
+  return 2*sin(x)*cos(y)*cos(2*z);	
+
+}
+
+
+void save_outputs(const fftwArr::r2c_3D &phi,
+		  const std::array<fftwArr::r2c_3D,3> &gradphi,
 		  double L)
 {
 
@@ -274,63 +282,72 @@ void save_outputs(const fftwArr::r2c_2D &phi,
 
   int Nx = phi.global_Nx();
   int Ny = phi.global_Ny();
+  int Nz = phi.global_Nz();
   
   double dx = L/Nx;
   double dy = L/Ny;
+  double dz = L/Nz;
   
 
   int local0start = phi.get_local0start();
 
-  double x,y;
+  double x,y,z;
 
 
-  myfile << "x,y,phi,gradphi_x,gradphi_y" << std::endl;
+  myfile << "x,y,z,phi,gradphi_x,gradphi_y,gradphi_z" << std::endl;
   
-  for (int jy = 0; jy < phi.size_axis1(); jy++) {
-    y = (jy+local0start)*dy;
-    for (int ix = 0; ix < phi.size_axis0(); ix++) {
-      x = ix*dx;
-      myfile << x << "," << y << "," << phi(ix,jy) << ","
-	     << gradphi[0](ix,jy) << "," << gradphi[1](ix,jy) << std::endl;
+  for (int i = 0; i < phi.size_axis2(); i++) {
+    z = (i+local0start)*dz;
+    for (int j = 0; j < phi.size_axis1(); j++) {
+      y = j*dy;
+      for (int k = 0; k < phi.size_axis0(); k++) {
+	x = k*dx;
+	myfile << x << "," << y << "," << z << "," << phi(k,j,i) << ","
+	       << gradphi[0](k,j,i) << "," << gradphi[1](k,j,i) << ","
+	       << gradphi[2](k,j,i) << std::endl;
+      }
     }
+
   }
-  
-  
-  
+
 }
-std::complex<double> get_qx(double qx, double qy, void *obj)
+std::complex<double> get_qx(double qx, double qy, double qz, void *obj)
 {
 
   return qx;
 }
 
 
-std::complex<double> get_qy(double qx, double qy, void *obj)
+std::complex<double> get_qy(double qx, double qy, double qz, void *obj)
 {
   
   return qy;
 }
 
 
-
-
-void compute_gradients(std::array<fftwArr::c2r_2D,2> &ft_gradphi,
-		       const fftwArr::c2r_2D &ft_phi,  double L)
+std::complex<double> get_qz(double qx, double qy, double qz, void *obj)
 {
 
-  // this is redundant, just highlighting the feeatures of the array2D class
+  return qz;
+}
+
+
+void compute_gradients(std::array<fftwArr::c2r_3D,3> &ft_gradphi,
+		       const fftwArr::c2r_3D &ft_phi,  double L)
+{
+
+  // this is redundant, just highlighting the feeatures of the array3D class
 
   std::complex<double> I1(0,1);
 
-  std::array<double,2> differentials = {2*M_PI/L,2*M_PI/L};
+  std::array<double,3> differentials = {2*M_PI/L,2*M_PI/L,2*M_PI/L};
 
   ft_gradphi[0].apply_function(get_qx,nullptr,differentials);
   
-
   ft_gradphi[1].apply_function(get_qy,nullptr,differentials);
+  ft_gradphi[2].apply_function(get_qz,nullptr,differentials);
 
-
-  for (int dim = 0; dim < 2; dim++) {
+  for (int dim = 0; dim < 3; dim++) {
     ft_gradphi[dim] *= ft_phi;
     ft_gradphi[dim] *= I1;
   }
@@ -338,4 +355,6 @@ void compute_gradients(std::array<fftwArr::c2r_2D,2> &ft_gradphi,
 
   return;
 }
+
+
 

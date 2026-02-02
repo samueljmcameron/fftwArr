@@ -7,7 +7,8 @@
 #include "fftw_arr_testing_utils/utils.hpp"
 
 template < enum fftwArr::Transform rOc, typename T>
-void test_function(MPI_Comm ,int );
+void test_function(MPI_Comm ,int ,
+		   enum fftwArr::Transposed);
 
 int main()
 {
@@ -24,12 +25,27 @@ int main()
   fftw_mpi_init();
 
   for (int dim = 2; dim <= 3; dim++) {
-    test_function<fftwArr::Transform::R2C,double>(world,dim);
+    test_function<
+      fftwArr::Transform::R2C,double
+      >(world,dim,fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2R,std::complex<double>>(world,dim);
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>
+      >(world,dim,fftwArr::Transposed::NO);
+    
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>
+      >(world,dim,fftwArr::Transposed::YES);
+    
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>
+      >(world,dim,fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2C,std::complex<double>>(world,dim);
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>
+      >(world,dim,fftwArr::Transposed::YES);
 
+    
   }
   
   fftw_mpi_cleanup();
@@ -40,7 +56,8 @@ int main()
 }
 
 template < enum fftwArr::Transform rOc, typename T>
-void test_function(MPI_Comm world,int dim)
+void test_function(MPI_Comm world,int dim,
+		   enum fftwArr::Transposed transpose)
 {
 
 
@@ -48,18 +65,24 @@ void test_function(MPI_Comm world,int dim)
   MPI_Comm_rank(world,&me);
   std::string dtype = fftwArrTestingUtils::TypeToString(typeid(T).name());
 
+  bool is_transposed;
+
   
   if (dim == 2) {
     int Nx = 20;
-    int Ny = 7;
+    int Ny = 19;
     
     // define the array to be transform, phi(x,y,z), in both real and fourier space
-    fftwArr::array2D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny);
+    fftwArr::array2D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,
+				  transpose);
     fftwArr::array2D<rOc,T> phi_2;
     
-    phi_2 = fftwArr::array2D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny);
+    phi_2 = fftwArr::array2D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx*2,Ny,
+				    transpose);
     
     phi_2 = 1.0;
+
+    is_transposed = phi_2.is_transposed();
     
     try {
       
@@ -100,17 +123,19 @@ void test_function(MPI_Comm world,int dim)
     
   } else if (dim == 3) {
     int Nx = 20;
-    int Ny = 7;
+    int Ny = 23;
     int Nz = 13;
     
     // define the array to be transform, phi(x,y,z), in both real and fourier space
-    fftwArr::array3D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,Nz);
+    fftwArr::array3D<rOc,T> phi_1(MPI_COMM_WORLD,"phi_1",Nx,Ny,Nz,
+				  transpose);
     fftwArr::array3D<rOc,T> phi_2;
     
-    phi_2 = fftwArr::array3D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny,Nz);
+    phi_2 = fftwArr::array3D<rOc,T>(MPI_COMM_WORLD,"phi_2",Nx/2,Ny,Nz,
+				    transpose);
     
     phi_2 = 1.0;
-    
+    is_transposed = phi_2.is_transposed();
     
     try {
       
@@ -152,7 +177,10 @@ void test_function(MPI_Comm world,int dim)
   }
 
   if (me == 0)
-    std::cout << fftwArrTestingUtils::SuccessMessage(dtype,rOc,dim) << std::endl;
+    std::cout
+      << fftwArrTestingUtils::SuccessMessage(dtype,rOc,dim,
+					     is_transposed)
+      << std::endl;
 
   
 }

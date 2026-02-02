@@ -37,9 +37,6 @@ int main()
   fftw_mpi_cleanup();
 
 
-  
-  if (nprocs > 1)
-    std::cout << "WARNING: ostream output will be out of order in general for nprocs > 1." << std::endl;
 
 
   ierr = MPI_Finalize();

@@ -81,11 +81,13 @@ int main(int argc, char **argv)
   int Nx = 40;
   int Ny = 34;
   int Nz = 20;
-  double L = 2*M_PI;
+  double Lx = 12.0;
+  double Ly = 4.0;
+  double Lz = 23.0;  
 
   double aNumber = 1;
 
-  std::array<double,3> differentials = {L/Nx,L/Ny,L/Nz};
+  std::array<double,3> differentials = {Lx/Nx,Ly/Ny,Lz/Nz};
   std::array<double,3> origin = {0.0,0.0,0.0};
   
 
@@ -132,7 +134,7 @@ int main(int argc, char **argv)
   global_r2cMember_time /= phi.get_nprocs();
   
   phi -= output;
-  local_flag = fftwArrTestingUtils::all_zero(phi,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(phi,tolerance);
 
 
   
@@ -177,7 +179,7 @@ int main(int argc, char **argv)
   global_r2cVanilla_time /= phi.get_nprocs();
   
   phi -= output;
-  local_flag = fftwArrTestingUtils::all_zero(phi,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(phi,tolerance);
   
   MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT, MPI_SUM,
 		phi.get_world());
@@ -226,7 +228,7 @@ int main(int argc, char **argv)
   global_c2rMember_time /= ft_theta.get_nprocs();
   
   ft_theta -= ft_output;
-  local_flag = fftwArrTestingUtils::all_zero(ft_theta,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(ft_theta,tolerance);
 
 
   
@@ -272,7 +274,7 @@ int main(int argc, char **argv)
   global_c2rVanilla_time /= ft_theta.get_nprocs();
   
   ft_theta -= ft_output;
-  local_flag = fftwArrTestingUtils::all_zero(ft_theta,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(ft_theta,tolerance);
   
   MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT, MPI_SUM,
 		ft_theta.get_world());
@@ -320,7 +322,7 @@ int main(int argc, char **argv)
   global_c2cMember_time /= complex_psi.get_nprocs();
   
   complex_psi -= complex_output;
-  local_flag = fftwArrTestingUtils::all_zero(complex_psi,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(complex_psi,tolerance);
 
 
   
@@ -365,7 +367,7 @@ int main(int argc, char **argv)
   global_c2cVanilla_time /= complex_psi.get_nprocs();
   
   complex_psi -= complex_output;
-  local_flag = fftwArrTestingUtils::all_zero(complex_psi,tolerance);
+  local_flag = fftwArrTestingUtils::all_zero_3d(complex_psi,tolerance);
   
   MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT, MPI_SUM,
 		complex_psi.get_world());
@@ -416,11 +418,11 @@ void r2c_3d_apply_function(double (*func)(double,double,double,void*),
   int local_0_start = output.get_local0start();
   double x, y, z;
   
-  for (int kz = 0; kz < output.Nz(); kz ++ ) {
+  for (int kz = 0; kz < output.size_axis2(); kz ++ ) {
     z = ( kz + local_0_start ) *differential[2] + origin[2];
-    for (int jy = 0; jy < output.Ny(); jy ++ ) {
+    for (int jy = 0; jy < output.size_axis1(); jy ++ ) {
       y =  jy * differential[1] + origin[1];
-      for (int ix = 0; ix < output.Nx(); ix ++ ) {
+      for (int ix = 0; ix < output.size_axis0(); ix ++ ) {
 	x = ix * differential[0] + origin[0];
 	
 	output(ix,jy,kz) = func(x,y,z,object);
@@ -447,22 +449,44 @@ void c2r_3d_apply_function(std::complex<double>
   int global_x_size = output.global_Nx();
   int local_0_start = output.get_local0start();
 
-  
-  for (int kz = 0; kz < output.Nz(); kz ++) {
-    if (kz + local_0_start > global_z_size/2)
-      qz = (-global_z_size + kz + local_0_start ) * differential[2];
-    else
-      qz = ( kz + local_0_start ) * differential[2];
-    for (int jy = 0; jy < output.Ny(); jy ++ ) {
-      if (jy > global_y_size/2)
-	qy = (-global_y_size + jy ) * differential[1];
+
+  if (output.is_transposed()) {
+    for (int jy = 0; jy < output.size_axis2(); jy ++) {
+      if (jy + local_0_start > global_y_size/2)
+	qy = (-global_y_size + jy + local_0_start ) * differential[1];
       else
-	qy =  jy * differential[1];
-      for (int ix = 0; ix < output.Nx(); ix ++ ) {
-	qx = ix * differential[0];
-	
-	output(ix,jy,kz) = func(qx,qy,qz,object);
-	
+	qy = ( jy + local_0_start ) * differential[1];
+      for (int kz = 0; kz < output.size_axis1(); kz ++ ) {
+	if (kz > global_z_size/2)
+	  qz = (-global_z_size + kz ) * differential[2];
+	else
+	  qz =  kz * differential[2];
+	for (int ix = 0; ix < output.size_axis0(); ix ++ ) {
+	  qx = ix * differential[0];
+	  
+	  output(ix,kz,jy) = func(qx,qy,qz,object);
+	  
+	}
+      }
+    }
+  } else {
+
+    for (int kz = 0; kz < output.size_axis2(); kz ++) {
+      if (kz + local_0_start > global_z_size/2)
+	qz = (-global_z_size + kz + local_0_start ) * differential[2];
+      else
+	qz = ( kz + local_0_start ) * differential[2];
+      for (int jy = 0; jy < output.size_axis1(); jy ++ ) {
+	if (jy > global_y_size/2)
+	  qy = (-global_y_size + jy ) * differential[1];
+	else
+	  qy =  jy * differential[1];
+	for (int ix = 0; ix < output.size_axis0(); ix ++ ) {
+	  qx = ix * differential[0];
+	  
+	  output(ix,jy,kz) = func(qx,qy,qz,object);
+	  
+	}
       }
     }
   }
@@ -483,29 +507,52 @@ void c2c_3d_apply_function(std::complex<double>
   int global_x_size = output.global_Nx();
   int local_0_start = output.get_local0start();
 
-  
-  for (int kz = 0; kz < output.Nz(); kz ++) {
-    if (kz + local_0_start > global_z_size/2)
-      qz = (-global_z_size + kz + local_0_start ) * differential[2];
-    else
-      qz = ( kz + local_0_start ) * differential[2];
-    for (int jy = 0; jy < output.Ny(); jy ++ ) {
-      if (jy > global_y_size/2)
-	qy = (-global_y_size + jy ) * differential[1];
+  if (output.is_transposed()) {
+    for (int jy = 0; jy < output.size_axis2(); jy ++) {
+      if (jy + local_0_start > global_y_size/2)
+	qy = (-global_y_size + jy + local_0_start ) * differential[1];
       else
-	qy =  jy * differential[1];
-      for (int ix = 0; ix < output.Nx(); ix ++ ) {
-	if (ix > global_x_size/2)
-	  qx = (-global_x_size + ix ) * differential[0];
+	qy = ( jy + local_0_start ) * differential[1];
+      for (int kz = 0; kz < output.size_axis1(); kz ++ ) {
+	if (kz > global_z_size/2)
+	  qz = (-global_z_size + kz ) * differential[2];
 	else
-	  qx = ix * differential[0];
-	
-	output(ix,jy,kz) = func(qx,qy,qz,object);
-	
+	  qz =  kz * differential[2];
+	for (int ix = 0; ix < output.size_axis0(); ix ++ ) {
+	  if (ix > global_x_size/2)
+	    qx = (-global_x_size + ix ) * differential[0];
+	  else
+	    qx = ix * differential[0];
+	  
+	  output(ix,kz,jy) = func(qx,qy,qz,object);
+	  
+	}
+      }
+    }
+  } else {
+  
+    for (int kz = 0; kz < output.size_axis2(); kz ++) {
+      if (kz + local_0_start > global_z_size/2)
+	qz = (-global_z_size + kz + local_0_start ) * differential[2];
+      else
+	qz = ( kz + local_0_start ) * differential[2];
+      for (int jy = 0; jy < output.size_axis1(); jy ++ ) {
+	if (jy > global_y_size/2)
+	  qy = (-global_y_size + jy ) * differential[1];
+	else
+	  qy =  jy * differential[1];
+	for (int ix = 0; ix < output.size_axis0(); ix ++ ) {
+	  if (ix > global_x_size/2)
+	    qx = (-global_x_size + ix ) * differential[0];
+	  else
+	    qx = ix * differential[0];
+	  
+	  output(ix,jy,kz) = func(qx,qy,qz,object);
+	  
+	}
       }
     }
   }
-  
   return;
 }
   

@@ -52,9 +52,9 @@ MESSAGE(STATUS "FFTWARRTESTINGUTILS_LIBRARIES::" ${FFTWARRTESTINGUTILS_LIBRARIES
 
 
 
-add_executable(test-3d_r2c_transform_transpose main.cpp)
+add_executable(test-3d_r2c_transform main.cpp)
 
-target_link_libraries(test-3d_r2c_transform_transpose PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
+target_link_libraries(test-3d_r2c_transform PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})

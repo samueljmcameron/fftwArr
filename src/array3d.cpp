@@ -229,7 +229,8 @@ array3D<rOc,T>::array3D(const MPI_Comm &comm,std::string name,
   if (global_procs != nprocs)
     throw std::runtime_error("Only " + std::to_string(global_procs)
 			     + " out of " + std::to_string(nprocs)
-			     + " processors have fftwArr data stored.");
+			     + " processors have "
+			     + name + " fftwArr data stored.");
   
   
   
@@ -325,14 +326,14 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double,void *),
     if (is_transposed()) {
       for (int jy = 0; jy < sizeax[2]; jy ++) {
 	if (jy + local_0_start > global_y_size/2)
-	  qy = (-global_y_size + jy + local_0_start ) * differential[2];
+	  qy = (-global_y_size + jy + local_0_start ) * differential[1];
 	else
-	  qy = ( jy + local_0_start ) * differential[2];
+	  qy = ( jy + local_0_start ) * differential[1];
 	for (int kz = 0; kz < sizeax[1]; kz ++ ) {
 	  if (kz > global_z_size/2)
-	    qz = (-global_z_size + kz ) * differential[1];
+	    qz = (-global_z_size + kz ) * differential[2];
 	  else
-	    qz =  kz * differential[1];
+	    qz =  kz * differential[2];
 	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	    if (ix > global_x_size/2)
 	      qx = (-global_x_size + ix ) * differential[0];
@@ -378,14 +379,14 @@ void array3D<rOc,T>::apply_function(T (*func)(double,double,double,void *),
     if (is_transposed()) {
       for (int jy = 0; jy < sizeax[2]; jy ++) {
 	if (jy + local_0_start > global_y_size/2)
-	  qy = (-global_y_size + jy + local_0_start ) * differential[2];
+	  qy = (-global_y_size + jy + local_0_start ) * differential[1];
 	else
-	  qy = ( jy + local_0_start ) * differential[2];
+	  qy = ( jy + local_0_start ) * differential[1];
 	for (int kz = 0; kz < sizeax[1]; kz ++ ) {
 	  if (kz > global_z_size/2)
-	    qz = (-global_z_size + kz ) * differential[1];
+	    qz = (-global_z_size + kz ) * differential[2];
 	  else
-	    qz =  kz * differential[1];
+	    qz =  kz * differential[2];
 	  for (int ix = 0; ix < sizeax[0]; ix ++ ) {
 	    qx = ix * differential[0];
 	    

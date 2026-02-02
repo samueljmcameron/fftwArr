@@ -10,7 +10,8 @@
 #include "fftw_arr_testing_utils/utils.hpp"
 
 template < enum fftwArr::Transform rOc, typename T>
-void test_function(MPI_Comm ,int );
+void test_function(MPI_Comm ,int ,
+		   enum fftwArr::Transposed);
 
 int main()
 {
@@ -39,12 +40,26 @@ int main()
 
   for (int dim = 2; dim <=3 ; dim ++) {
   
-    test_function<fftwArr::Transform::R2C,double>(world,dim);
+    test_function<
+      fftwArr::Transform::R2C,double
+      >(world,dim,fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2R,std::complex<double>>(world,dim);
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>
+      >(world,dim,fftwArr::Transposed::NO);
 
-    test_function<fftwArr::Transform::C2C,std::complex<double>>(world,dim);
+    test_function<
+      fftwArr::Transform::C2R,std::complex<double>
+      >(world,dim,fftwArr::Transposed::YES);
 
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>
+      >(world,dim,fftwArr::Transposed::NO);
+
+    test_function<
+      fftwArr::Transform::C2C,std::complex<double>
+      >(world,dim,fftwArr::Transposed::YES);
+	
     
     
   }
@@ -60,15 +75,13 @@ int main()
 
 
 template < enum fftwArr::Transform rOc,typename T>
-void test_function(MPI_Comm world,int dim)
+void test_function(MPI_Comm world,int dim,
+		   enum fftwArr::Transposed transpose)
 {
 
   std::unique_ptr<fftwArr::array2D<rOc,T>> phi_2d;
   std::unique_ptr<fftwArr::array3D<rOc,T>> phi_3d;
 
-  phi_2d = nullptr;
-  phi_3d = nullptr;
-  int global_final_axis_size;
 
   int me;
   MPI_Comm_rank(world,&me);
@@ -76,32 +89,53 @@ void test_function(MPI_Comm world,int dim)
   std::vector<int> split_sizes;
   
   std::string dtype = fftwArrTestingUtils::TypeToString(typeid(T).name());
+
+  bool is_transposed;
   
   if (dim == 2) {
     
     
-    int Nx = 3;
+    int Nx = 13;
     int Ny = 9;
-    global_final_axis_size = Ny;
-    
-    phi_2d = std::make_unique<fftwArr::array2D<rOc,T>>(world,"phi_2d",Nx,Ny);
 
+    
+    phi_2d =
+      std::make_unique<
+	fftwArr::array2D<rOc,T>
+	>(world,"phi_2d",Nx,Ny,transpose);
+    
     split_sizes = phi_2d->split_sizes();
+
+    is_transposed = phi_2d->is_transposed();
+
     
   } else if (dim == 3) {
   
     int Nx = 3;
-    int Ny = 2;
+    int Ny = 19;
     int Nz = 10;
-    global_final_axis_size = Nz;
+
     
-    phi_3d = std::make_unique<fftwArr::array3D<rOc,T>>(world,"phi_3d",Nx,Ny,Nz);
+    phi_3d =
+      std::make_unique<
+	fftwArr::array3D<rOc,T>
+	>(world,"phi_3d",Nx,Ny,Nz,transpose);
     
     split_sizes = phi_3d->split_sizes();
-
+    is_transposed = phi_3d->is_transposed();
   }
   if (me == 0) {
-    std::cout << "SUCCESS: " + fftwArrTestingUtils::fftwArrName(dtype,rOc,dim) << std::endl;
+
+
+    int global_final_axis_size = 0;
+    for (auto item : split_sizes)
+      global_final_axis_size += item;
+    
+    std::cout
+      << "SUCCESS: "
+      + fftwArrTestingUtils::fftwArrName(dtype,rOc,dim,
+					 is_transposed)
+      << std::endl;
 
     std::string message = "Processor split sizes along the ";
     if (dim == 2)

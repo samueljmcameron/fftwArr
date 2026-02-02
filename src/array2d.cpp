@@ -225,7 +225,8 @@ array2D<rOc,T>::array2D(const MPI_Comm &comm,std::string name,
   if (global_procs != nprocs)
     throw std::runtime_error("Only " + std::to_string(global_procs)
 			     + " out of " + std::to_string(nprocs)
-			     + " processors have fftwArr data stored.");
+			     + " processors have "
+			     + name + " fftwArr data stored.");
   
   
   array_name = name;
