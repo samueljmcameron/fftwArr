@@ -645,20 +645,34 @@ void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
 
   int recvid, sendid;
 
-  int gsize;
 
-  if (is_transposed())
-    gsize = global_y_size;
-  else
-    gsize = global_x_size;
-  if (!fftw_recv && overlap)
-    fftw_recv
-      = std::make_unique<array2D<rOc,T>>(world,array_name
-				     +std::string("_neighborplane"),
-				     gsize,nprocs);
+  if (!fftw_recv && overlap) {
 
+    int gsize;
+    if (is_transposed()) {
 
-
+      // For C2R type array, firstaxis//2 + 1 so
+      //  need to make sure global_y_size = firstaxis//2+1
+      if (rOc == fftwArr::Transform::C2R)
+	gsize = 2*(global_y_size-1); 
+      else if (rOc == fftwArr::Transform::C2C)
+	gsize = global_y_size;
+      else
+	throw std::runtime_error("NEVER GET HERE");
+    } else {
+      gsize = global_x_size;
+      
+    }
+    
+    
+    fftw_recv =
+      std::make_unique<
+	array2D<rOc,T>
+	>(world,array_name+std::string("_neighborplane"),
+	  gsize,nprocs,fftwArr::Transposed::NO);
+  }
+  
+  
   int pad;
   if (!overlap || nprocs == 1)
     pad = 0;
@@ -699,6 +713,7 @@ void array2D<rOc,T>::write_to_binary(std::fstream &myfile,
 		 fftw_recv->data(),fftw_recv->spacer_size(),
 		 MPI_DOUBLE,recvid,0,world,MPI_STATUS_IGNORE);
 
+    
     if (me != 0)
 
       myfile.write((char*)&(*fftw_recv)(0,0),

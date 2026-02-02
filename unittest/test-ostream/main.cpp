@@ -100,9 +100,6 @@ void test_function(MPI_Comm world,int dim,
   std::unique_ptr<fftwArr::array2D<rOc,T>> phi_2d;
   std::unique_ptr<fftwArr::array3D<rOc,T>> phi_3d;
 
-  phi_2d = nullptr;
-  phi_3d = nullptr;
-
   int me;
   MPI_Comm_rank(world,&me);
 
@@ -114,8 +111,8 @@ void test_function(MPI_Comm world,int dim,
   if (dim == 2) {
     
     
-    int Nx = 3;
-    int Ny = 9;
+    int Nx = 9;
+    int Ny = 13;
     
     
     phi_2d
@@ -132,7 +129,7 @@ void test_function(MPI_Comm world,int dim,
   } else if (dim == 3) {
   
     int Nx = 3;
-    int Ny = 2;
+    int Ny = 12;
     int Nz = 10;
     
     phi_3d
