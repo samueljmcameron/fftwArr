@@ -8,14 +8,11 @@ array is arr(nx,ny,nz) then the correct symmetry is
    conjugate(array(nx,ny,nz)) = array(kx*Nx-nx,ky*Ny-ny,kz*Nz-nz)
 
 where Nx, Ny, Nz are the grid point numbers, and kx, ky, and kz
-are all (arbitrary) integers. The relevant case for us is
-
-   conjugate(array(nx,ny,nz)) = array(Nx-nx,Ny-ny,Nz-nz).
-
+are all (arbitrary) integers. 
 
 First, we note that the box in Fourier space chosen by DFT is
-not the first Brillouin zone. Below, we show for Nx = 4,
-Ny = 10, and Nz = 24 the Fourier space domain used in DFT.
+not the first Brillouin zone. Below, we show the Fourier space
+domain used in DFT for a c2r array with size (Nx//2+1) x Ny x Nz.
 
 
     Nx//2 ________________________
@@ -35,135 +32,220 @@ Ny = 10, and Nz = 24 the Fourier space domain used in DFT.
        0                      Nz-1
 
 
-We need to rearrane this into the Brillouin zone so first,
-we divide it into blocks
+The planes nx=0 and nx=Nx//2 have redundant information in them,
+all other points are unique under the symmetry. Therefore, the
+relevant case for us is
+
+   conjugate(array(0,ny,nz)) = array(0,ky*Ny-ny,kz*Nz-nz).
+
+and, if Nx is an even number,
+
+   conjugate(array(Nx//2,ny,nz)) = array(Nx//2,ky*Ny-ny,kz*Nz-nz)
+
+for c2r arrays.
+
+In order to proceed, we split both the nx=0 and the nx=Nx//2 (if Nx
+is even) planes into four blocks:
 
 
-    Nx//2 ________________________
-         /            /          /|
-        /            /          / | 
-    0  /____________/__________/  |
- Ny-1  |            |          |  |
-       |    ^       |   ^      |  /
-       |    C->     |   D->    | /|
-       |____________|__________|/ |
- Ny//2 |            |          |  |
-       |    ^       |   ^      |  |
-       |    A ->    |   B->    |  /
-       |            |          | /
-       |____________|__________|/
+        _______________________
+ Ny-1  |            |          |
+       |    ^       |   ^      |
+       |    C->     |   D->    |
+       |____________|__________|
+ Ny//2 |            |          |
+       |    ^       |   ^      |
+       |    A ->    |   B->    |
+       |            |          |
+       |____________|__________|
      0
        0          Nz//2       Nz-1
 
+For a single processor, the symmetry is fairly straightforward to
+enforce. We choose block A to pass information to Block D, and Block C
+to pass information to block B. The additional complication is that
+these planes are split by cpu processor as well. So one needs to send
+and receive data across processors.
 
-Due to periodicity, we know that
+Single processor:
 
-    array(nx,ny,nz) ->  array(nx+kx*Nx,ny+ky*Ny,nz+kz*Nz)
+We consider the nx = 0 plane here (everything generalises to nx=Nx//2
+for even Nx also).
 
-where Nx, Ny, Nz are the grid point numbers, and kx, ky, and kz
-are all (arbitrary) integers.
+
+Case 1: Ny % 2 == 0 and Nz % 2 == 0.
+
+There are four points in the plane that are purely real:
+
+(0,0,0)
+(0,Ny//2,0)
+(0,0,Nz//2)
+(0,Ny//2,Nz//2)
+
+
+There are then also four lines which have the symmetry
+
+   conjugate(array(0,0,nz)) = array(0,0,Nz-nz)
+
+   conjugate(array(0,Ny//2,nz)) = array(0,Ny//2,Nz-nz)
+
+   conjugate(array(0,ny,0)) = array(0,Ny-ny,0)
+
+   conjugate(array(0,ny,Nz//2)) = array(0,Ny-ny,Nz//2)
+
+Finally, the remaining points within the blocks must be filled.
+We decide to always send from A and C to receive at D and B.
+
+for (int nz = 1; nz < array.global_Nz()//2; nz++) {
+
+    for (int ny = 1; ny < array.global_Ny()//2; ny++) {
     
-Block A stays where it is. The transform applied is
-the identity,
+       // currently in Block A
+       
+       array(0,ny,nz) = PHI(0,ny,nz); // whatever function
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
 
-    array(nx,ny,nz) ->  array(nx,ny,nz)
+   for (int ny = array.global_Ny()//2+1; ny ++) {
+   
+       // now in Block C, must shift the calculation of PHI
+       // so that we stay in the first Brillouin zone
+       
+       array(0,ny,nz) = PHI(0,ny-Ny,nz); // SECOND ARGUMENT SHIFTED
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
 
-and the vertices stay the same at
+   }
 
-(i,0,0)
-(i,Ny//2,0)
-(i,0,Nz//2)
-(i,Ny//2,Nz//2)
-
-(i,0,0)
-(i,Ny//2,0)
-(i,0,Nz//2)
-(i,Ny//2,Nz//2)
-
-for i in {0,Nx//2}.
-
-Block B has to transform. The transform applied is
-
-  array(nx,ny,nz) ->  array(nx,ny,nz-Nz)
-
-so the vertices are moved to
-
-(i,0,Nz//2+1)     -> (0,0,1-Nz//2)
-(i,0,Nz-1)        -> (0,0,-1)
-(i,Ny//2,Nz//2+1) -> (0,Ny//2,1-Nz//2)
-(i,Ny//2,Nz-1)    -> (0,Ny//2,-1)
-
-for i in {0,Nx//2}.
-
-Block C has to transform. The transform applied is
-
-  array(nx,ny,nz) ->  array(nx,ny-Ny,nz)
-
-so the vertices are moved to
-
-(i,Ny//2+1,0)     -> (0,1-Ny//2,0)
-(i,Ny-1,0)        -> (0,-1,0)
-(i,Ny//2+1,Nz//2) -> (0,1-Ny//2,Nz//2)
-(i,Ny-1,Nz//2)    -> (0,-1,Nz//2)
-
-for i in {0,Nx//2}.
-
-Block D has to transform. The transform applied is
-
-  array(nx,ny,nz) ->  array(nx,ny-Ny,nz-Nz)
-
-so the vertices are moved to
-
-(i,Ny//2+1,Nz//2+1) -> (0,1-Ny//2,1-Nz//2)
-(i,Ny-1,Nz//2+1)    -> (0,-1,1-Nz//2)
-(i,Ny//2+1,Nz-1)    -> (0,1-Ny//2,-1)
-(i,Ny-1,Nz-1)       -> (0,-1,-1)
-
-for i in {0,Nx//2}.
-
-
-Therefore, the Brillouin zone is
-
-    Nx//2 ________________________
-         /          /            /|
-        /          /            / | 
-    0  /__________/____________/  |
- Ny//2 |          |            |  |
-       |      ^   |    ^       |  |
-       |    <-B   |    A->     |  /
-       |          |            | /|
-       |__________|____________|/ |
-    0  |          |            |  |
-       |   <-D    |    C->     |  /
-       |     ⌄    |    ⌄       | / 
-       |__________|____________|/
-1-Ny//2       
-      1-Nz//2     0          Nz//2
-
-
-
-Practically, the way to approach this when calling a
-function which depends on qx,qy,qz is to do
-
-
-for (int kz = 0; kz < ft_phi.Nz(); kz ++ ) {
-  if (kz + ft_phi.get_local0start() > ft_phi.global_Nz()/2)
-    qz = (-ft_phi.global_Nz() + kz + ft_phi.get_local0start() ) * dqz;
-  else
-    qz = ( kz + ft_phi.get_local0start() ) * dqz;
-  for (int jy = 0; jy < ft_phi.Ny(); jy ++ ) {
-    if (jy > ft_phi.global_Ny()/2)
-      qz = (-ft_phi.global_Ny() + jy ) * dqy;
-    else
-      qy = jy * dqy;
-    for (int ix = 0; ix < ft_phi.Nx(); ix ++ ) {
-      qx = ix * dqx;
-      ft_phi(ix,jy,kz) = PHI(qx,qy,qz);
-      // PHI(qx,qy,qz) is some function like sin(qx)*4*qy + qz
-    }
-  }
 }
 
 
 
-Next, we consider the fact that we are 
+Case 2: Ny % 2 == 0 and Nz % 2 == 1.
+
+There are now only two points in the plane that are purely real:
+
+(0,0,0)
+(0,Ny//2,0)
+
+
+There are then only three lines which have the symmetry
+
+   conjugate(array(0,0,nz)) = array(0,0,Nz-nz)
+
+   conjugate(array(0,Ny//2,nz)) = array(0,Ny//2,Nz-nz)
+
+   conjugate(array(0,ny,0)) = array(0,Ny-ny,0)
+
+
+Finally, the remaining points within the blocks must be filled.
+We decide to always send from A and C to receive at D and B.
+
+The loop here looks the same, but since the number Nz is odd
+and integer division rounds down, it does something different
+at Nz//2 and Nz//2+1.
+
+
+for (int nz = 1; nz < array.global_Nz()//2; nz++) {
+
+    for (int ny = 1; ny < array.global_Ny()//2; ny++) {
+    
+       // currently in Block A
+       
+       array(0,ny,nz) = PHI(0,ny,nz); // whatever function
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   for (int ny = array.global_Ny()//2+1; ny ++) {
+   
+       // now in Block C, must shift the calculation of PHI
+       // so that we stay in the first Brillouin zone
+       
+       array(0,ny,nz) = PHI(0,ny-Ny,nz); // SECOND ARGUMENT SHIFTED
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   }
+
+}
+
+
+Case 3: Ny % 2 == 1 and Nz % 2 == 0.
+
+There are again only two points in the plane that are purely real:
+
+(0,0,0)
+(0,0,Nz//2)
+
+
+There are then only three lines which have the symmetry
+
+   conjugate(array(0,0,nz)) = array(0,0,Nz-nz)
+
+   conjugate(array(0,ny,0)) = array(0,Ny-ny,0)
+
+   conjugate(array(0,ny,Nz//2)) = array(0,Ny-ny,Nz//2)
+
+Finally, the remaining points within the blocks must be filled.
+We decide to always send from A and C to receive at D and B.
+
+The loop here is slightly different in that it loops over
+all ny values (not skipping a middle value as in the case of
+even Ny).
+
+for (int nz = 1; nz < array.global_Nz()//2; nz++) {
+
+    for (int ny = 1; ny < array.global_Ny()//2; ny++) {
+    
+       // currently in Block A
+       
+       array(0,ny,nz) = PHI(0,ny,nz); // whatever function
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   for (int ny = array.global_Ny()//2; ny ++) {
+   
+       // now in Block C, must shift the calculation of PHI
+       // so that we stay in the first Brillouin zone
+       
+       array(0,ny,nz) = PHI(0,ny-Ny,nz); // SECOND ARGUMENT SHIFTED
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   }
+
+}
+
+
+Case 4: Ny % 2 == 1 and Nz % 2 == 1.
+
+There is only one point in the plane that is purely real:
+
+(0,0,0)
+
+
+There are then only two lines which have the symmetry
+
+   conjugate(array(0,0,nz)) = array(0,0,Nz-nz)
+
+   conjugate(array(0,ny,0)) = array(0,Ny-ny,0)
+
+Finally, the remaining points within the blocks must be filled.
+We decide to always send from A and C to receive at D and B.
+
+The loop is just a combination of cases 2 and 3 above.
+
+for (int nz = 1; nz < array.global_Nz()//2; nz++) {
+
+    for (int ny = 1; ny < array.global_Ny()//2; ny++) {
+    
+       // currently in Block A
+       
+       array(0,ny,nz) = PHI(0,ny,nz); // whatever function
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   for (int ny = array.global_Ny()//2; ny ++) {
+   
+       // now in Block C, must shift the calculation of PHI
+       // so that we stay in the first Brillouin zone
+       
+       array(0,ny,nz) = PHI(0,ny-Ny,nz); // SECOND ARGUMENT SHIFTED
+       array(0,Ny-ny,Nz-nz) = conjugate(array(0,ny,nz));
+
+   }
+
+}
