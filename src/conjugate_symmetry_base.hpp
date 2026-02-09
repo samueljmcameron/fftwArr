@@ -69,7 +69,10 @@ private:
   void share_local_recvs();
   void share_local_0_starts();
   void set_sends_recvs();
-  
+
+  void share_global_list_to_processors(std::vector<std::vector<int>> &,
+				       const std::vector<int> &);
+
 public:
 
   ConjugateSymmetryBase(ptrdiff_t,ptrdiff_t,MPI_Comm);
@@ -80,6 +83,8 @@ public:
 
   std::vector<int> send_to_processors,recv_from_processors;
 
+  std::vector<std::vector<int>> global_list_of_send_to_processors;
+  std::vector<std::vector<int>> global_list_of_recv_from_processors;
   
 
 };

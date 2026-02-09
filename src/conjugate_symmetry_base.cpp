@@ -194,7 +194,8 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
   
   std::array<ptrdiff_t,2> send_to;
   std::array<ptrdiff_t,2> recv_from;
-  
+
+
   
   if (left) {
 
@@ -212,9 +213,6 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
     recv_from.at(1) = global_axis_size - rb_tmp.at(0)-local_0_start + 1;
 
 
-    if (me == 1)
-      std::cout << recv_bounds.at(0) << std::endl;
-
     if (send_to.at(1) - send_to.at(0) > 0) {
       for (int p = 0; p < nprocs; p++) {
 	
@@ -228,6 +226,7 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
 	ptrdiff_t first,last;
 	
 	if (hi - low > 0 && hi > send_to.at(0) && low < send_to.at(1)) {
+
 	  
 	  send_to_processors.push_back(p);
 	  
@@ -236,6 +235,7 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
 	  last = hi > send_to.at(1) ? send_to.at(1) : hi;
 	  
 	  list_of_send_bounds.push_back({first,last});
+
 	  
 	}
       
@@ -269,7 +269,7 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
 	  last = hi > recv_from.at(1) ? recv_from.at(1) : hi;
 	  
 	  list_of_recv_bounds.push_back({first,last});
-	  
+
 	}
       
 	
@@ -279,32 +279,125 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
     }
   }
 
-  /*
+  share_global_list_to_processors(global_list_of_send_to_processors,
+				  send_to_processors);
+  if (me == 0)
+    for (auto &vec : global_list_of_send_to_processors) {
+      std::cout << " a processors has send_to_processors ";
+      for (auto & item : vec)
+	std::cout << item << ",";
+      std::cout << std::endl;
+    }
 
-    WORKING ON THIS NEXT!
+
+
+  share_global_list_to_processors(global_list_of_recv_from_processors,
+				  recv_from_processors);
+  if (me == 0)
+    for (auto &vec : global_list_of_recv_from_processors) {
+      std::cout << " a processors has recv_from_processors ";
+      for (auto & item : vec)
+	std::cout << item << ",";
+      std::cout << std::endl;
+    }
+
+
+  /*
+  //    WORKING ON THIS NEXT!
+  
+  // find all potential processors which might interact with current
+  // processor (on the right)
+
   if (right && !left) {
 
     
     auto & right_tmp = list_of_right_bounds.at(me);
 
+
     recv_from.at(0) = global_axis_size - right_tmp.at(1) + 1;
     recv_from.at(1) = global_axis_size - right_tmp.at(0) + 1;
-    
+
+    if (me == 1) {
+      std::cout << "recv_from.at(0) = "
+		<< recv_from.at(0) << std::endl;
+      std::cout << "recv_from.at(1) = "
+		<< recv_from.at(1) << std::endl;
+    }
 
     for (int p = me; p >= 0; p--) {
       auto & lb = list_of_left_bounds.at(p);
       
-      if (lb.at(1) - lb.at(0) <= 0) continue; // no left on processor p
+      if (lb.at(1) - lb.at(0) > 0 )
 
-      
-
-
-
+	buddies.push_back(p);
       
     }
 
+
+
   }
   */
+}
+
+
+
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>
+::share_global_list_to_processors(std::vector<std::vector<int>> 
+				  &global_list_to_processors,
+				  const std::vector<int> &to_processors)
+{
+
+
+  global_list_to_processors.resize(nprocs);
+  
+  std::vector<int> to_psizes(nprocs);
+  
+  int local_size_resize = to_processors.size();
+  
+
+  MPI_Allgather(&local_size_resize,1,MPI_INT,
+		to_psizes.data(),1,MPI_INT,world);
+
+
+
+
+  std::vector<int> displacements;
+  int sum = 0;
+  for (int i = 0; i < to_psizes.size(); i++) {
+    displacements.push_back(sum);
+    sum += to_psizes.at(i);
+  }
+
+
+  if (me == 0 ) {
+    std::cout << " DISPLACMENTS:" << std::endl;
+    for (auto & item : displacements)
+      std::cout << item << ",";
+    std::cout << std::endl;
+  }
+
+  int tmparray[sum];
+  
+
+  MPI_Allgatherv(to_processors.data(),to_processors.size(),
+		 MPI_INT,&tmparray[0],to_psizes.data(),
+		 displacements.data(),MPI_INT,world);
+  
+  
+  for (int i = 0; i < global_list_to_processors.size(); i++) {
+    global_list_to_processors.at(i).resize(to_psizes.at(i));
+    
+    for (int j = 0; j < to_psizes.at(i); j++)
+      
+      global_list_to_processors.at(i).at(j)
+	= tmparray[j+displacements.at(i)];
+    
+  }
+  
+
+  return;
+  
 }
 
 
