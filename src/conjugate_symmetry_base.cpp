@@ -3,6 +3,7 @@
 #include <string>
 #include <mpi.h>
 #include <cstddef>
+#include <cstdint>
 
 #include <iostream>
 
@@ -18,8 +19,7 @@ ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
 (ptrdiff_t local_axis_size, ptrdiff_t local_0_start,MPI_Comm world)
   : local_axis_size(local_axis_size),local_0_start(local_0_start),
     world(world),left(0),right(0),global_left_bounds{},
-    global_right_bounds{},left_bounds{},right_bounds{},
-    send_bounds{},recv_bounds{}
+    global_right_bounds{},left_bounds{},right_bounds{}
 {
 
   MPI_Comm_size(world,&nprocs);
@@ -42,6 +42,9 @@ ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
 
   decide_left_sends_recvs();
 
+  share_left_sends_recvs();
+  update_right_sends_recvs();
+  
   
   
 }
@@ -214,9 +217,13 @@ template < enum Transform rOc,typename T>
 void ConjugateSymmetryBase<rOc,T>::decide_left_sends_recvs()
 {
 
+  // indices for sending and receiving from the current
+  // processor. 
+  std::array<ptrdiff_t,2> send_bounds,recv_bounds;
 
+  
   // initially, find the send_bounds and recv_bounds for the left side
-  init_left_sends_recvs();
+  init_left_sends_recvs(send_bounds,recv_bounds);
 
   
   // determine the send and receive 
@@ -312,13 +319,15 @@ void ConjugateSymmetryBase<rOc,T>::decide_left_sends_recvs()
 
     }
   }
-
-
+  
+  
 }
 
 
 template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::init_left_sends_recvs()
+void ConjugateSymmetryBase<rOc,T>
+::init_left_sends_recvs(std::array<ptrdiff_t,2> &send_bounds,
+			std::array<ptrdiff_t,2> &recv_bounds)
 {
 
   int splitter;
@@ -366,42 +375,66 @@ void ConjugateSymmetryBase<rOc,T>::share_left_sends_recvs()
 template < enum Transform rOc,typename T>
 void ConjugateSymmetryBase<rOc,T>::update_right_sends_recvs()
 {
-  /*
-  //    WORKING ON THIS NEXT!
+
   
-  // find all potential processors which might interact with current
-  // processor (on the right)
-
-  if (right && !left) {
-
+  if (right) {
     
-    auto & right_tmp = list_of_right_bounds.at(me);
-
-
-    recv_from.at(0) = global_axis_size - right_tmp.at(1) + 1;
-    recv_from.at(1) = global_axis_size - right_tmp.at(0) + 1;
-
-    if (me == 1) {
-      std::cout << "recv_from.at(0) = "
-		<< recv_from.at(0) << std::endl;
-      std::cout << "recv_from.at(1) = "
-		<< recv_from.at(1) << std::endl;
-    }
-
-    for (int p = me; p >= 0; p--) {
-      auto & lb = list_of_left_bounds.at(p);
+    for (int proc = me-1; proc >= 0; proc--) {
       
-      if (lb.at(1) - lb.at(0) > 0 )
+      for (auto node : global_node_sends.at(proc))
+	
+	if (node.proc == me) {
 
-	buddies.push_back(p);
+	  node.proc = proc;
+	  auto tmp0 = node.bounds[0];
+	  auto tmp1 = node.bounds[1];
+	  node.bounds[0] = global_axis_size-tmp1+1;
+	  node.bounds[1] = global_axis_size-tmp0+1;
+	  recv_nodes.push_back(node);
+
+	}
       
+      
+      for (auto node : global_node_recvs.at(proc))
+	
+	if (node.proc == me) {
+
+	  node.proc = proc;
+	  auto tmp0 = node.bounds[0];
+	  auto tmp1 = node.bounds[1];
+	  node.bounds[0] = global_axis_size-tmp1+1;
+	  node.bounds[1] = global_axis_size-tmp0+1;
+	  send_nodes.push_back(node);
+
+	}
     }
-
-
-
   }
-  */
+
 }
+
+/*
+template < enum Transform rOc,typename T>
+std::array<ptrdiff_t,2> ConjugateSymmetryBase<rOc,T>
+::get_vector_from_nodes(const std::vector<Node> & nodes) const
+{
+
+  ptrdiff_t low = PTRDIFF_MAX;
+  ptrdiff_t high = 0;
+
+
+  for (const auto &node : nodes) {
+    if (node.bounds[0] < low)
+      low = node.bounds[0];
+    if (node.bounds[1] > high)
+      high = node.bounds[1];
+  }
+
+  return {low-1,high-1};
+
+}
+*/
+
+
 
 template < enum Transform rOc,typename T>
 void ConjugateSymmetryBase<rOc,T>
@@ -554,50 +587,32 @@ std::string ConjugateSymmetryBase<rOc,T>::print_details() const
     output += "max index: "
       + std::to_string(right_bounds.at(1) + local_0_start - 1) + std::string("\n");
   }
-
-  if (left) {
-
-    output += "SEND\n";
-    output += "index min: "
-      + std::to_string(send_bounds.at(0) + local_0_start) + std::string("\n");
-    output += "index max: "
-      + std::to_string(send_bounds.at(1) + local_0_start- 1) + std::string("\n");
-	
-    output += "RECEIVE\n";
-    output += "index min: "
-      + std::to_string(recv_bounds.at(0) + local_0_start) + std::string("\n");
-    output += "index max: "
-      + std::to_string(recv_bounds.at(1) + local_0_start - 1) + std::string("\n");
-    
-    output += "SEND_TO_PROCESSORS:\n";
-    
-    output += "(proc,first,last)\n";
-
-    for (auto & item : send_nodes) {
-      output += "(";
-      output += std::to_string(item.proc) + ",";
-      output += std::to_string(item.bounds[0]) + ",";
-      output += std::to_string(item.bounds[1]) + ")\n";
-    
-    }
-
-
-    output += "RECV_FROM_PROCESSORS:\n";
-    
-    output += "(proc,first,last)\n";
-
-
-    for (auto & item : recv_nodes) {
-      output += "(";
-      output += std::to_string(item.proc) + ",";
-      output += std::to_string(item.bounds[0]) + ",";
-      output += std::to_string(item.bounds[1]) + ")\n";
-    
-    }
-
+  
+  output += "SEND_TO_PROCESSORS:\n";
+  
+  output += "(proc,first,last)\n";
+  
+  for (auto & item : send_nodes) {
+    output += "(";
+    output += std::to_string(item.proc) + ",";
+    output += std::to_string(item.bounds[0]) + ",";
+    output += std::to_string(item.bounds[1]) + ")\n";
     
   }
+
   
+  output += "RECV_FROM_PROCESSORS:\n";
+  
+  output += "(proc,first,last)\n";
+  
+  
+  for (auto & item : recv_nodes) {
+    output += "(";
+    output += std::to_string(item.proc) + ",";
+    output += std::to_string(item.bounds[0]) + ",";
+    output += std::to_string(item.bounds[1]) + ")\n";
+    
+  }
  
   return output;
 

@@ -57,10 +57,6 @@ private:
 
   std::array<ptrdiff_t,2> left_bounds, right_bounds;
 
-  // indices for sending and receiving from the current
-  // processor. 
-  
-  std::array<ptrdiff_t,2> send_bounds,recv_bounds;
 
   std::vector<ptrdiff_t> list_of_local_0_starts;
 
@@ -78,7 +74,8 @@ private:
 
   
   void decide_left_sends_recvs();
-  void init_left_sends_recvs();
+  void init_left_sends_recvs(std::array<ptrdiff_t,2> &,
+			     std::array<ptrdiff_t,2> &);
 
 
 
@@ -90,6 +87,8 @@ private:
 
 
   void update_right_sends_recvs();
+  void finit_right_sends_recvs();
+  std::array<ptrdiff_t,2> get_vector_from_nodes(const std::vector<Node> &) const;
   
   void set_MPI_NodeType();
   

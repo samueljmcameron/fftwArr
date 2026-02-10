@@ -12,7 +12,7 @@
 #include "fftw_arr/conjugate_symmetry_base.hpp"
 
 template < enum fftwArr::Transform rOc, typename T>
-void test_function(MPI_Comm ,int ,
+void test_function(MPI_Comm ,int ,const std::string &,
 		   enum fftwArr::Transposed);
 
 int main()
@@ -29,29 +29,37 @@ int main()
 
   fftw_mpi_init();
 
+  std::string file_directory;
+
+
 
   
+  if (me == 0) {
+    std::cout << "Please specify the directory to save to : ";
+    std::cin >> file_directory;
+  }
 
-  for (int dim = 3; dim <=3 ; dim ++) {
+  int fd_string_length = file_directory.size();  
+  MPI_Bcast(&fd_string_length, 1, MPI_INT, 0, world);
+
+  if (me != 0)
+    file_directory.resize(fd_string_length);
+
+  MPI_Bcast(const_cast<char*>(file_directory.data()),
+	    fd_string_length, MPI_CHAR, 0, world);
+  
+  for (int dim = 2; dim <=3 ; dim ++) {
   
 
     test_function<
       fftwArr::Transform::C2R,std::complex<double>
-      >(world,dim,fftwArr::Transposed::NO);
+      >(world,dim,file_directory,fftwArr::Transposed::NO);
 
-    test_function<
-      fftwArr::Transform::C2R,std::complex<double>
-      >(world,dim,fftwArr::Transposed::YES);
+    if (dim != 2)
+      test_function<
+	fftwArr::Transform::C2R,std::complex<double>
+	>(world,dim,file_directory,fftwArr::Transposed::YES);
 
-    /*
-    test_function<
-      fftwArr::Transform::C2C,std::complex<double>
-      >(world,dim,fftwArr::Transposed::NO);
-
-    test_function<
-      fftwArr::Transform::C2C,std::complex<double>
-      >(world,dim,fftwArr::Transposed::YES);
-    */	
     
     
   }
@@ -68,12 +76,13 @@ int main()
 
 template < enum fftwArr::Transform rOc,typename T>
 void test_function(MPI_Comm world,int dim,
+		   const std::string &directory,
 		   enum fftwArr::Transposed transpose)
 {
 
   std::unique_ptr<fftwArr::array2D<rOc,T>> phi_2d;
   std::unique_ptr<fftwArr::array3D<rOc,T>> phi_3d;
-  std::unique_ptr<fftwArr::ConjugateSymmetryBase<rOc,T>> conj_3d;
+  std::unique_ptr<fftwArr::ConjugateSymmetryBase<rOc,T>> conj;
 
 
   int me;
@@ -90,8 +99,8 @@ void test_function(MPI_Comm world,int dim,
   if (dim == 2) {
     
     
-    int Nx = 13;
-    int Ny = 9;
+    int Nx = 17;
+    int Ny = 20;
 
     
     phi_2d =
@@ -99,8 +108,15 @@ void test_function(MPI_Comm world,int dim,
 	fftwArr::array2D<rOc,T>
 	>(world,"phi_2d",Nx,Ny,transpose);
     
-    split_sizes = phi_2d->split_sizes();
 
+    conj =
+      std::make_unique<
+	fftwArr::ConjugateSymmetryBase<rOc,T>
+	>(phi_2d->size_axis1(),phi_2d->get_local0start(),
+	  phi_2d->get_world());
+
+
+    
     is_transposed = phi_2d->is_transposed();
 
     
@@ -116,7 +132,7 @@ void test_function(MPI_Comm world,int dim,
 	fftwArr::array3D<rOc,T>
 	>(world,"phi_3d",Nx,Ny,Nz,transpose);
 
-    conj_3d =
+    conj =
       std::make_unique<
 	fftwArr::ConjugateSymmetryBase<rOc,T>
 	>(phi_3d->size_axis2(),phi_3d->get_local0start(),
@@ -125,62 +141,42 @@ void test_function(MPI_Comm world,int dim,
     
     is_transposed = phi_3d->is_transposed();
 
-    filename = "output/" + 
-      fftwArrTestingUtils::fftwArrName(dtype,rOc,dim,
-				       is_transposed);
-    
-    filename += std::string("_p") + std::to_string(me);
-    std::ofstream writefile;
-
-    writefile.open(filename);
-    
-    
-    int local_flag,global_flag;
-    std::string broken_file = "";
-    local_flag = 0;
-    
-    if (!writefile) {
-      local_flag = 1;
-      broken_file = "Failed to open (write-only) " + filename;
-  }
-    
-    
-    MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT,MPI_SUM,
-		  world);
-    
-    if (global_flag > 0)
-      throw std::runtime_error(broken_file);
-
-    
-
-
-    
-    writefile << conj_3d->print_details();
-
-    if (me == 0) {
-      std::cout << "left bounds globally:" << std::endl;
-      for (auto & arr : conj_3d->list_of_left_bounds)
-	for (auto item : arr)
-	  std::cout << item << " ";
-      std::cout << std::endl;
-
-      std::cout << "right bounds globally:" << std::endl;
-      for (auto & arr : conj_3d->list_of_right_bounds)
-	for (auto item : arr)
-	  std::cout << item << " ";
-      std::cout << std::endl;
-    }
-    
-    /*
-    if (me == 0) {
-      std::cout << "SEND TO LIST: " << std::endl;
-      for (auto s : conj_3d->send_to_list)
-	std::cout << s << std::endl;
-    }
-    */
-    
     
   }
+
+
+
+  filename = directory + std::string("/") +
+    fftwArrTestingUtils::fftwArrName(dtype,rOc,dim,
+				     is_transposed);
+  
+  filename += std::string("_p") + std::to_string(me);
+  std::ofstream writefile;
+  
+  writefile.open(filename);
+  
+  
+  int local_flag,global_flag;
+  std::string broken_file = "";
+  local_flag = 0;
+  
+  if (!writefile) {
+    local_flag = 1;
+    broken_file = "Failed to open (write-only) " + filename;
+  }
+  
+  
+  MPI_Allreduce(&local_flag, &global_flag, 1, MPI_INT,MPI_SUM,
+		world);
+  
+  if (global_flag > 0)
+    throw std::runtime_error(broken_file);
+  
+  
+  
+  
+  
+  writefile << conj->print_details();
 
   
   
