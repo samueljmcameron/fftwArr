@@ -264,8 +264,12 @@ void ConjNodes::decide_left_sends_recvs()
 	  
 	  Node node;
 	  node.proc = p;
-	  node.bounds[0] = first;
-	  node.bounds[1] = last;
+	  node.my_bounds[0] = global_axis_size + 1 - last;
+	  node.my_bounds[1] = global_axis_size + 1 - first;
+	  node.your_bounds[0] = first;
+	  node.your_bounds[1] = last;
+
+	  
 	  send_nodes.push_back(node);
 
 	  
@@ -300,8 +304,10 @@ void ConjNodes::decide_left_sends_recvs()
 
 	  Node node;
 	  node.proc = p;
-	  node.bounds[0] = first;
-	  node.bounds[1] = last;
+	  node.my_bounds[0] = global_axis_size + 1 - last;
+	  node.my_bounds[1] = global_axis_size + 1 - first;
+	  node.your_bounds[0] = first;
+	  node.your_bounds[1] = last;
 	  recv_nodes.push_back(node);
 	  
 
@@ -377,10 +383,10 @@ void ConjNodes::update_right_sends_recvs()
 	if (node.proc == me) {
 
 	  node.proc = proc;
-	  auto tmp0 = node.bounds[0];
-	  auto tmp1 = node.bounds[1];
-	  node.bounds[0] = global_axis_size-tmp1+1;
-	  node.bounds[1] = global_axis_size-tmp0+1;
+	  node.my_bounds[0] = node.your_bounds[0];
+	  node.my_bounds[1] = node.your_bounds[1];
+	  node.your_bounds[0] = global_axis_size-node.my_bounds[1]+1;
+	  node.your_bounds[1] = global_axis_size-node.my_bounds[0]+1;
 	  recv_nodes.push_back(node);
 
 	}
@@ -391,10 +397,10 @@ void ConjNodes::update_right_sends_recvs()
 	if (node.proc == me) {
 
 	  node.proc = proc;
-	  auto tmp0 = node.bounds[0];
-	  auto tmp1 = node.bounds[1];
-	  node.bounds[0] = global_axis_size-tmp1+1;
-	  node.bounds[1] = global_axis_size-tmp0+1;
+	  node.my_bounds[0] = node.your_bounds[0];
+	  node.my_bounds[1] = node.your_bounds[1];
+	  node.your_bounds[0] = global_axis_size-node.my_bounds[1]+1;
+	  node.your_bounds[1] = global_axis_size-node.my_bounds[0]+1;
 	  send_nodes.push_back(node);
 
 	}
@@ -574,27 +580,31 @@ std::string ConjNodes::print_details() const
   
   output += "SEND_TO_PROCESSORS:\n";
   
-  output += "(proc,first,last)\n";
+  output += "(proc,my_first,my_last,your_first,your_last)\n";
   
   for (auto & item : send_nodes) {
     output += "(";
     output += std::to_string(item.proc) + ",";
-    output += std::to_string(item.bounds[0]) + ",";
-    output += std::to_string(item.bounds[1]) + ")\n";
+    output += std::to_string(item.my_bounds[0]) + ",";
+    output += std::to_string(item.my_bounds[1]) + ",";
+    output += std::to_string(item.your_bounds[0]) + ",";
+    output += std::to_string(item.your_bounds[1]) + ")\n";
     
   }
 
   
   output += "RECV_FROM_PROCESSORS:\n";
   
-  output += "(proc,first,last)\n";
+  output += "(proc,my_first,my_last,your_first,your_last)\n";
   
   
   for (auto & item : recv_nodes) {
     output += "(";
     output += std::to_string(item.proc) + ",";
-    output += std::to_string(item.bounds[0]) + ",";
-    output += std::to_string(item.bounds[1]) + ")\n";
+    output += std::to_string(item.my_bounds[0]) + ",";
+    output += std::to_string(item.my_bounds[1]) + ",";
+    output += std::to_string(item.your_bounds[0]) + ",";
+    output += std::to_string(item.your_bounds[1]) + ")\n";
     
   }
  
@@ -606,9 +616,9 @@ void ConjNodes::set_MPI_NodeType()
 {
 
   MPI_Datatype tmptype;
-  MPI_Datatype oldtypes[2];
-  int blockcounts[2];
-  MPI_Aint offsets[2];
+  MPI_Datatype oldtypes[3];
+  int blockcounts[3];
+  MPI_Aint offsets[3];
   MPI_Status status;
 
   offsets[0] = offsetof(Node,proc);
@@ -616,11 +626,16 @@ void ConjNodes::set_MPI_NodeType()
   blockcounts[0] = 1;
 
 
-  offsets[1] = offsetof(Node,bounds);
+  offsets[1] = offsetof(Node,my_bounds);
   oldtypes[1] = MPI_AINT;
   blockcounts[1] = 2;
 
-  MPI_Type_create_struct(2,blockcounts,offsets,oldtypes,&tmptype);
+
+  offsets[2] = offsetof(Node,your_bounds);
+  oldtypes[2] = MPI_AINT;
+  blockcounts[2] = 2;
+  
+  MPI_Type_create_struct(3,blockcounts,offsets,oldtypes,&tmptype);
 
   MPI_Aint lb, extent;
   MPI_Type_get_extent(tmptype, &lb, &extent);

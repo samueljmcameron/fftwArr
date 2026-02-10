@@ -6,7 +6,8 @@
 namespace fftwArr {
 struct Node {
   int proc;
-  ptrdiff_t bounds[2];
+  ptrdiff_t my_bounds[2];
+  ptrdiff_t your_bounds[2];
 };
 
 
