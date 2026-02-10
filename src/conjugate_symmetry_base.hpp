@@ -9,6 +9,25 @@ namespace fftwArr {
 template < enum Transform rOc,typename T>
 class ConjugateSymmetryBase
 {
+public:
+
+  struct Node {
+    int proc;
+    ptrdiff_t bounds[2];
+  };
+
+  ConjugateSymmetryBase(ptrdiff_t,ptrdiff_t,MPI_Comm);
+  ~ConjugateSymmetryBase();
+  std::string print_details() const;
+
+  std::vector<std::array<ptrdiff_t,2>> list_of_left_bounds;
+  std::vector<std::array<ptrdiff_t,2>> list_of_right_bounds;
+
+  std::vector<Node> send_nodes, recv_nodes;
+  
+
+  std::vector<std::vector<Node>> global_node_sends;
+  std::vector<std::vector<Node>> global_node_recvs;  
 
 
 private:
@@ -43,48 +62,36 @@ private:
   
   std::array<ptrdiff_t,2> send_bounds,recv_bounds;
 
-  // extra required for the processor which has left and right
-  // both (if it exists)
-
-  std::array<ptrdiff_t,2> second_send_bounds,second_recv_bounds;
-
   std::vector<ptrdiff_t> list_of_local_0_starts;
 
-  std::vector<std::array<ptrdiff_t,2>> list_of_send_bounds;
-  std::vector<std::array<ptrdiff_t,2>> list_of_recv_bounds;
 
-
-
-
-
+  MPI_Datatype MPI_NodeType;
 
   void set_global_bounds();
   void set_left_and_right();
   void set_local_bounds();
-  void init_left_sends_recvs();
 
+  void share_local_to_global();
   void share_local_lefts();
   void share_local_rights();  
-  void share_local_sends();
-  void share_local_recvs();
   void share_local_0_starts();
-  void set_sends_recvs();
 
+  
+  void decide_left_sends_recvs();
+  void init_left_sends_recvs();
+
+
+
+  void share_left_sends_recvs();
   void share_global_list_to_processors(std::vector<std::vector<int>> &,
 				       const std::vector<int> &);
+  void share_global_list_to_processors(std::vector<std::vector<Node>> &,
+				       const std::vector<Node> &);
 
-public:
 
-  ConjugateSymmetryBase(ptrdiff_t,ptrdiff_t,MPI_Comm);
-  std::string print_details() const;
-
-  std::vector<std::array<ptrdiff_t,2>> list_of_left_bounds;
-  std::vector<std::array<ptrdiff_t,2>> list_of_right_bounds;
-
-  std::vector<int> send_to_processors,recv_from_processors;
-
-  std::vector<std::vector<int>> global_list_of_send_to_processors;
-  std::vector<std::vector<int>> global_list_of_recv_from_processors;
+  void update_right_sends_recvs();
+  
+  void set_MPI_NodeType();
   
 
 };

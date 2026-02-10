@@ -2,6 +2,7 @@
 #include <array>
 #include <string>
 #include <mpi.h>
+#include <cstddef>
 
 #include <iostream>
 
@@ -21,28 +22,25 @@ ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
     send_bounds{},recv_bounds{}
 {
 
-
   MPI_Comm_size(world,&nprocs);
   MPI_Comm_rank(world,&me);
+
+  set_MPI_NodeType();
 
 
   MPI_Allreduce(&local_axis_size, &global_axis_size, 1, MPI_AINT, MPI_SUM, world);
 
   set_global_bounds();
 
+
   set_left_and_right();
+  
   set_local_bounds();
-
-
-  
     
 
-  share_local_0_starts();
+  share_local_to_global();
 
-  share_local_lefts();
-  share_local_rights();
-  
-  set_sends_recvs();
+  decide_left_sends_recvs();
 
   
   
@@ -50,86 +48,49 @@ ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
 
 
 template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::init_left_sends_recvs()
+ConjugateSymmetryBase<rOc,T>::~ConjugateSymmetryBase()
 {
-
-  int splitter;
-  
-  if (right && left) {
-    
-    // split the left side into send and receive
-    splitter = (left_bounds.at(1)-left_bounds.at(0))/2;
-    
-    
-  } else if (left) {
-    
-    splitter = left_bounds.at(1)/2;
-
-
-  }
-
-  if (left) {
-
-    send_bounds.at(0) = left_bounds.at(0);
-    send_bounds.at(1) = left_bounds.at(0) + splitter;
-    recv_bounds.at(0) = send_bounds.at(1);
-    recv_bounds.at(1) = left_bounds.at(1);
-
-  }
-    
-  return;
+  MPI_Type_free(&MPI_NodeType);
 }
 
 
+
+
+
 template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_local_bounds()
+void ConjugateSymmetryBase<rOc,T>::set_global_bounds()
+/*
+  determine where the split between left and right is globally
+ */
 {
 
-  if (right && left) {
+  // left indices as in left of the middle value (which
+  //  is global_axis_size/2)
 
-    if (me == 0)
-      left_bounds.at(0) = 1;
-    else
-      left_bounds.at(0) = 0;
-    left_bounds.at(1) = global_left_bounds.at(1)-local_0_start;
+  global_left_bounds.at(0) = 1;
+  global_left_bounds.at(1) = (global_axis_size+1)/2;
 
+  
 
-    right_bounds.at(0) = global_right_bounds.at(0)-local_0_start;
-    right_bounds.at(1) = local_axis_size;
+  // right indices as in right of the middle value (which
+  //  is global_axis_size/2)
 
+  global_right_bounds.at(0) = global_axis_size/2 + 1;
+  global_right_bounds.at(1) = global_axis_size;
 
-
-  } else if (left) {
-
-    if (me == 0)
-      left_bounds.at(0) = 1;
-    else
-      left_bounds.at(0) = 0;
-    
-    left_bounds.at(1) = local_axis_size;
-
-
-    // set right bounds so that it will not trigger a for loop
-    right_bounds.at(0) = local_axis_size;
-    right_bounds.at(1) = local_axis_size;
-
-    
-
-  } else if (right) {
-
-    // set left bounds so that it will not trigger a for loop
-    left_bounds.at(0) = 0;
-    left_bounds.at(1) = 0;
-    
-    right_bounds.at(0) = 0;
-    right_bounds.at(1) = local_axis_size;
-
-  }
   return;
+  
 }
 
 template < enum Transform rOc,typename T>
 void ConjugateSymmetryBase<rOc,T>::set_left_and_right()
+/*
+  set left = 1 if processor is left of the global split
+  set right = 1 if processor is right of the global split
+  
+  (can be both)
+  
+*/
 {
 
   
@@ -159,29 +120,98 @@ void ConjugateSymmetryBase<rOc,T>::set_left_and_right()
   return;
 }
 
+
+
+
+
 template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_global_bounds()
+void ConjugateSymmetryBase<rOc,T>::set_local_bounds()
+/*
+  Find the left and right index bounds for the local processor.
+  The lower bound is always included in the for loop, while the
+  upper bound is always one greater than the for loop upper bound
+
+  e.g. for (int i = left_bounds.at(0); i < left_bounds.at(1); i++)
+
+  
+  Do not include the global index 0 (or the global index
+  global_axis_size/2 if global_axis_size % 2 == 0) since those
+  two indices are not to be shared between processors.
+  
+ */  
 {
 
-  // left indices as in left of the middle value (which
-  //  is global_axis_size/2)
-
-  global_left_bounds.at(0) = 1;
-  global_left_bounds.at(1) = (global_axis_size+1)/2;
   
+  if (right && left) {
 
-  // right indices as in right of the middle value (which
-  //  is global_axis_size/2)
+    if (me == 0)
+      left_bounds.at(0) = 1;
+    else
+      left_bounds.at(0) = 0;
+    left_bounds.at(1) = global_left_bounds.at(1)-local_0_start;
 
-  global_right_bounds.at(0) = global_axis_size/2 + 1;
-  global_right_bounds.at(1) = global_axis_size;
 
+    right_bounds.at(0) = global_right_bounds.at(0)-local_0_start;
+    right_bounds.at(1) = local_axis_size;
+
+
+
+  } else if (left) {
+
+    if (me == 0)
+      left_bounds.at(0) = 1;
+    else
+      left_bounds.at(0) = 0;
+
+    left_bounds.at(1) = local_axis_size;
+    
+    // if the processor's largest index == global_axis_size/2 (no
+    // integer division), then the left bound needs to shift down by
+    // one
+    if (global_axis_size % 2 == 0
+	&& local_axis_size + local_0_start == global_right_bounds.at(0)) {
+      std::cout << "MADE IT HERE ON PROCESSOR " << me << std::endl;
+      left_bounds.at(1) -= 1;
+    }
+
+
+    // set right bounds so that it will not trigger a for loop
+    right_bounds.at(0) = local_axis_size;
+    right_bounds.at(1) = local_axis_size;
+
+    
+
+  } else if (right) {
+
+    // set left bounds so that it will not trigger a for loop
+    left_bounds.at(0) = 0;
+    left_bounds.at(1) = 0;
+
+
+    
+    right_bounds.at(0) = 0;
+
+    
+    // if the processor's smallest index == global_axis_size/2 (no
+    // integer division), then the right bound needs to shift up by
+    // one
+    
+    if (global_axis_size % 2 == 0
+	&& local_0_start == global_left_bounds.at(1))
+      right_bounds.at(1) += 1;
+
+    
+    right_bounds.at(1) = local_axis_size;
+
+  }
   return;
-  
 }
 
+
+
+
 template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
+void ConjugateSymmetryBase<rOc,T>::decide_left_sends_recvs()
 {
 
 
@@ -227,14 +257,15 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
 	
 	if (hi - low > 0 && hi > send_to.at(0) && low < send_to.at(1)) {
 
-	  
-	  send_to_processors.push_back(p);
-	  
 	  first = low < send_to.at(0) ? send_to.at(0) : low;
 	  
 	  last = hi > send_to.at(1) ? send_to.at(1) : hi;
 	  
-	  list_of_send_bounds.push_back({first,last});
+	  Node node;
+	  node.proc = p;
+	  node.bounds[0] = first;
+	  node.bounds[1] = last;
+	  send_nodes.push_back(node);
 
 	  
 	}
@@ -262,13 +293,16 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
 	
 	if (hi - low > 0 && hi > recv_from.at(0) && low < recv_from.at(1)) {
 	  
-	  recv_from_processors.push_back(p);
-	  
 	  first = low < recv_from.at(0) ? recv_from.at(0) : low;
 	  
 	  last = hi > recv_from.at(1) ? recv_from.at(1) : hi;
+
+	  Node node;
+	  node.proc = p;
+	  node.bounds[0] = first;
+	  node.bounds[1] = last;
+	  recv_nodes.push_back(node);
 	  
-	  list_of_recv_bounds.push_back({first,last});
 
 	}
       
@@ -279,29 +313,59 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
     }
   }
 
-  share_global_list_to_processors(global_list_of_send_to_processors,
-				  send_to_processors);
-  if (me == 0)
-    for (auto &vec : global_list_of_send_to_processors) {
-      std::cout << " a processors has send_to_processors ";
-      for (auto & item : vec)
-	std::cout << item << ",";
-      std::cout << std::endl;
-    }
+
+}
+
+
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>::init_left_sends_recvs()
+{
+
+  int splitter;
+  
+  if (right && left) {
+    
+    // split the left side into send and receive
+    splitter = (left_bounds.at(1)-left_bounds.at(0))/2;
+    
+    
+  } else if (left) {
+    
+    splitter = left_bounds.at(1)/2;
+
+
+  }
+
+  if (left) {
+
+    send_bounds.at(0) = left_bounds.at(0);
+    send_bounds.at(1) = left_bounds.at(0) + splitter;
+    recv_bounds.at(0) = send_bounds.at(1);
+    recv_bounds.at(1) = left_bounds.at(1);
+
+  }
+    
+  return;
+}
 
 
 
-  share_global_list_to_processors(global_list_of_recv_from_processors,
-				  recv_from_processors);
-  if (me == 0)
-    for (auto &vec : global_list_of_recv_from_processors) {
-      std::cout << " a processors has recv_from_processors ";
-      for (auto & item : vec)
-	std::cout << item << ",";
-      std::cout << std::endl;
-    }
+  
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>::share_left_sends_recvs()
+{
+  share_global_list_to_processors(global_node_sends,
+				  send_nodes);
+
+  share_global_list_to_processors(global_node_recvs,
+				  recv_nodes);
+}  
 
 
+
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>::update_right_sends_recvs()
+{
   /*
   //    WORKING ON THIS NEXT!
   
@@ -339,65 +403,75 @@ void ConjugateSymmetryBase<rOc,T>::set_sends_recvs()
   */
 }
 
-
-
 template < enum Transform rOc,typename T>
 void ConjugateSymmetryBase<rOc,T>
-::share_global_list_to_processors(std::vector<std::vector<int>> 
+::share_global_list_to_processors(std::vector<std::vector<Node>> 
 				  &global_list_to_processors,
-				  const std::vector<int> &to_processors)
+				  const std::vector<Node> &to_processors)
 {
 
 
+  // make sure the global list has nproc elements
   global_list_to_processors.resize(nprocs);
+
+
+  // create array to store the number of nodes for each local processor
+  std::vector<int> nodes_per_proc(nprocs);
+
+  // get local number of nodes
+  const int local_node_number = to_processors.size();
   
-  std::vector<int> to_psizes(nprocs);
-  
-  int local_size_resize = to_processors.size();
-  
 
-  MPI_Allgather(&local_size_resize,1,MPI_INT,
-		to_psizes.data(),1,MPI_INT,world);
+  // communicate the local number of nodes to to_psizes
+  MPI_Allgather(&local_node_number,1,MPI_INT,
+		nodes_per_proc.data(),1,MPI_INT,world);
 
 
 
 
+  // get the displacements of each node
   std::vector<int> displacements;
+
+  // add up all the total number of nodes across all processors
   int sum = 0;
-  for (int i = 0; i < to_psizes.size(); i++) {
+  for (int p = 0; p < nprocs; p++) {
     displacements.push_back(sum);
-    sum += to_psizes.at(i);
+    sum += nodes_per_proc.at(p);
   }
 
-
-  if (me == 0 ) {
-    std::cout << " DISPLACMENTS:" << std::endl;
-    for (auto & item : displacements)
-      std::cout << item << ",";
-    std::cout << std::endl;
-  }
-
-  int tmparray[sum];
+  // temporary array to store all entries of nodes in order in a flattened
+  // list (do this vs direct send to global list to avoid mpi complexities)
+  std::vector<Node> tmparray(sum);
   
 
-  MPI_Allgatherv(to_processors.data(),to_processors.size(),
-		 MPI_INT,&tmparray[0],to_psizes.data(),
-		 displacements.data(),MPI_INT,world);
+  MPI_Allgatherv(to_processors.data(),local_node_number,
+		 MPI_NodeType,tmparray.data(),nodes_per_proc.data(),
+		 displacements.data(),MPI_NodeType,world);
   
-  
-  for (int i = 0; i < global_list_to_processors.size(); i++) {
-    global_list_to_processors.at(i).resize(to_psizes.at(i));
+
+
+  // transfer data from tmparray to global list
+  for (int p = 0; p < nprocs; p++) {
+    global_list_to_processors.at(p).resize(nodes_per_proc.at(p));
     
-    for (int j = 0; j < to_psizes.at(i); j++)
+    for (int j = 0; j < nodes_per_proc.at(p); j++)
       
-      global_list_to_processors.at(i).at(j)
-	= tmparray[j+displacements.at(i)];
+      global_list_to_processors.at(p).at(j)
+	= tmparray.at(j+displacements.at(p));
     
   }
   
 
   return;
   
+}
+
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>::share_local_to_global()
+{
+  share_local_0_starts();
+  share_local_lefts();
+  share_local_rights();
 }
 
 
@@ -499,14 +573,12 @@ std::string ConjugateSymmetryBase<rOc,T>::print_details() const
     
     output += "(proc,first,last)\n";
 
-    for (int i = 0; i < send_to_processors.size(); i++) {
-
+    for (auto & item : send_nodes) {
       output += "(";
-      output += std::to_string(send_to_processors.at(i)) ;
-      for (auto &si : list_of_send_bounds.at(i))
-	output += "," + std::to_string(si);
-      output += ")";
-      output += "\n";
+      output += std::to_string(item.proc) + ",";
+      output += std::to_string(item.bounds[0]) + ",";
+      output += std::to_string(item.bounds[1]) + ")\n";
+    
     }
 
 
@@ -514,14 +586,13 @@ std::string ConjugateSymmetryBase<rOc,T>::print_details() const
     
     output += "(proc,first,last)\n";
 
-    for (int i = 0; i < recv_from_processors.size(); i++) {
 
+    for (auto & item : recv_nodes) {
       output += "(";
-      output += std::to_string(recv_from_processors.at(i)) ;
-      for (auto &si : list_of_recv_bounds.at(i))
-	output += "," + std::to_string(si);
-      output += ")";
-      output += "\n";
+      output += std::to_string(item.proc) + ",";
+      output += std::to_string(item.bounds[0]) + ",";
+      output += std::to_string(item.bounds[1]) + ")\n";
+    
     }
 
     
@@ -532,5 +603,38 @@ std::string ConjugateSymmetryBase<rOc,T>::print_details() const
 
 }
 
+template < enum Transform rOc,typename T>
+void ConjugateSymmetryBase<rOc,T>::set_MPI_NodeType()
+{
+
+  MPI_Datatype tmptype;
+  MPI_Datatype oldtypes[2];
+  int blockcounts[2];
+  MPI_Aint offsets[2];
+  MPI_Status status;
+
+  offsets[0] = offsetof(Node,proc);
+  oldtypes[0] = MPI_INT;
+  blockcounts[0] = 1;
+
+
+  offsets[1] = offsetof(Node,bounds);
+  oldtypes[1] = MPI_AINT;
+  blockcounts[1] = 2;
+
+  MPI_Type_create_struct(2,blockcounts,offsets,oldtypes,&tmptype);
+
+  MPI_Aint lb, extent;
+  MPI_Type_get_extent(tmptype, &lb, &extent);
+
+  MPI_Type_create_resized(tmptype, lb, extent, &MPI_NodeType);
+
+  
+  MPI_Type_commit(&MPI_NodeType);
+
+  MPI_Type_free(&tmptype);
+
+  
+}
 
 template class fftwArr::ConjugateSymmetryBase<fftwArr::Transform::C2R,std::complex<double>>;
