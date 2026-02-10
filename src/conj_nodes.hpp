@@ -1,34 +1,27 @@
-#ifndef FFTWMPI_CONJUGATE_SYMMETRY_BASE_HPP
-#define FFTWMPI_CONJUGATE_SYMMETRY_BASE_HPP
+#ifndef FFTWMPI_CONJ_NODES_HPP
+#define FFTWMPI_CONJ_NODES_HPP
 
 #include "fftw_arr.hpp"
 
 namespace fftwArr {
+struct Node {
+  int proc;
+  ptrdiff_t bounds[2];
+};
 
 
-template < enum Transform rOc,typename T>
-class ConjugateSymmetryBase
+class ConjNodes
 {
 public:
 
-  struct Node {
-    int proc;
-    ptrdiff_t bounds[2];
-  };
 
-  ConjugateSymmetryBase(ptrdiff_t,ptrdiff_t,MPI_Comm);
-  ~ConjugateSymmetryBase();
+  ConjNodes(ptrdiff_t,ptrdiff_t,MPI_Comm);
+  ~ConjNodes();
   std::string print_details() const;
 
-  std::vector<std::array<ptrdiff_t,2>> list_of_left_bounds;
-  std::vector<std::array<ptrdiff_t,2>> list_of_right_bounds;
 
   std::vector<Node> send_nodes, recv_nodes;
   
-
-  std::vector<std::vector<Node>> global_node_sends;
-  std::vector<std::vector<Node>> global_node_recvs;  
-
 
 private:
 
@@ -62,6 +55,15 @@ private:
 
 
   MPI_Datatype MPI_NodeType;
+
+
+  std::vector<std::array<ptrdiff_t,2>> list_of_left_bounds;
+  std::vector<std::array<ptrdiff_t,2>> list_of_right_bounds;
+
+  std::vector<std::vector<Node>> global_node_sends;
+  std::vector<std::vector<Node>> global_node_recvs;  
+
+  
 
   void set_global_bounds();
   void set_left_and_right();

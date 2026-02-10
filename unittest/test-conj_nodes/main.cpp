@@ -9,7 +9,7 @@
 #include "fftw_arr/array2d.hpp"
 #include "fftw_arr/array3d.hpp"
 #include "fftw_arr_testing_utils/utils.hpp"
-#include "fftw_arr/conjugate_symmetry_base.hpp"
+#include "fftw_arr/conj_nodes.hpp"
 
 template < enum fftwArr::Transform rOc, typename T>
 void test_function(MPI_Comm ,int ,const std::string &,
@@ -82,7 +82,7 @@ void test_function(MPI_Comm world,int dim,
 
   std::unique_ptr<fftwArr::array2D<rOc,T>> phi_2d;
   std::unique_ptr<fftwArr::array3D<rOc,T>> phi_3d;
-  std::unique_ptr<fftwArr::ConjugateSymmetryBase<rOc,T>> conj;
+  std::unique_ptr<fftwArr::ConjNodes> conj;
 
 
   int me;
@@ -111,7 +111,7 @@ void test_function(MPI_Comm world,int dim,
 
     conj =
       std::make_unique<
-	fftwArr::ConjugateSymmetryBase<rOc,T>
+	fftwArr::ConjNodes
 	>(phi_2d->size_axis1(),phi_2d->get_local0start(),
 	  phi_2d->get_world());
 
@@ -134,7 +134,7 @@ void test_function(MPI_Comm world,int dim,
 
     conj =
       std::make_unique<
-	fftwArr::ConjugateSymmetryBase<rOc,T>
+	fftwArr::ConjNodes
 	>(phi_3d->size_axis2(),phi_3d->get_local0start(),
 	  phi_3d->get_world());
 

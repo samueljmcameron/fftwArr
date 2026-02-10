@@ -7,15 +7,14 @@
 
 #include <iostream>
 
-#include "conjugate_symmetry_base.hpp"
+#include "conj_nodes.hpp"
 
 
 using namespace fftwArr;
 
 
 
-template < enum Transform rOc,typename T>
-ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
+ConjNodes::ConjNodes
 (ptrdiff_t local_axis_size, ptrdiff_t local_0_start,MPI_Comm world)
   : local_axis_size(local_axis_size),local_0_start(local_0_start),
     world(world),left(0),right(0),global_left_bounds{},
@@ -50,8 +49,7 @@ ConjugateSymmetryBase<rOc,T>::ConjugateSymmetryBase
 }
 
 
-template < enum Transform rOc,typename T>
-ConjugateSymmetryBase<rOc,T>::~ConjugateSymmetryBase()
+ConjNodes::~ConjNodes()
 {
   MPI_Type_free(&MPI_NodeType);
 }
@@ -60,8 +58,7 @@ ConjugateSymmetryBase<rOc,T>::~ConjugateSymmetryBase()
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_global_bounds()
+void ConjNodes::set_global_bounds()
 /*
   determine where the split between left and right is globally
  */
@@ -85,8 +82,7 @@ void ConjugateSymmetryBase<rOc,T>::set_global_bounds()
   
 }
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_left_and_right()
+void ConjNodes::set_left_and_right()
 /*
   set left = 1 if processor is left of the global split
   set right = 1 if processor is right of the global split
@@ -127,8 +123,7 @@ void ConjugateSymmetryBase<rOc,T>::set_left_and_right()
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_local_bounds()
+void ConjNodes::set_local_bounds()
 /*
   Find the left and right index bounds for the local processor.
   The lower bound is always included in the for loop, while the
@@ -213,8 +208,7 @@ void ConjugateSymmetryBase<rOc,T>::set_local_bounds()
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::decide_left_sends_recvs()
+void ConjNodes::decide_left_sends_recvs()
 {
 
   // indices for sending and receiving from the current
@@ -324,8 +318,7 @@ void ConjugateSymmetryBase<rOc,T>::decide_left_sends_recvs()
 }
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>
+void ConjNodes
 ::init_left_sends_recvs(std::array<ptrdiff_t,2> &send_bounds,
 			std::array<ptrdiff_t,2> &recv_bounds)
 {
@@ -360,8 +353,7 @@ void ConjugateSymmetryBase<rOc,T>
 
 
   
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::share_left_sends_recvs()
+void ConjNodes::share_left_sends_recvs()
 {
   share_global_list_to_processors(global_node_sends,
 				  send_nodes);
@@ -372,8 +364,7 @@ void ConjugateSymmetryBase<rOc,T>::share_left_sends_recvs()
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::update_right_sends_recvs()
+void ConjNodes::update_right_sends_recvs()
 {
 
   
@@ -413,8 +404,7 @@ void ConjugateSymmetryBase<rOc,T>::update_right_sends_recvs()
 }
 
 /*
-template < enum Transform rOc,typename T>
-std::array<ptrdiff_t,2> ConjugateSymmetryBase<rOc,T>
+std::array<ptrdiff_t,2> ConjNodes
 ::get_vector_from_nodes(const std::vector<Node> & nodes) const
 {
 
@@ -436,8 +426,7 @@ std::array<ptrdiff_t,2> ConjugateSymmetryBase<rOc,T>
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>
+void ConjNodes
 ::share_global_list_to_processors(std::vector<std::vector<Node>> 
 				  &global_list_to_processors,
 				  const std::vector<Node> &to_processors)
@@ -499,8 +488,7 @@ void ConjugateSymmetryBase<rOc,T>
   
 }
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::share_local_to_global()
+void ConjNodes::share_local_to_global()
 {
   share_local_0_starts();
   share_local_lefts();
@@ -508,8 +496,7 @@ void ConjugateSymmetryBase<rOc,T>::share_local_to_global()
 }
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::share_local_lefts()
+void ConjNodes::share_local_lefts()
 {
 
 
@@ -528,8 +515,7 @@ void ConjugateSymmetryBase<rOc,T>::share_local_lefts()
 }
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::share_local_rights()
+void ConjNodes::share_local_rights()
 {
 
 
@@ -551,8 +537,7 @@ void ConjugateSymmetryBase<rOc,T>::share_local_rights()
 
 
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::share_local_0_starts()
+void ConjNodes::share_local_0_starts()
 {
 
 
@@ -565,8 +550,7 @@ void ConjugateSymmetryBase<rOc,T>::share_local_0_starts()
 }
 
   
-template < enum Transform rOc,typename T>
-std::string ConjugateSymmetryBase<rOc,T>::print_details() const
+std::string ConjNodes::print_details() const
 {
 
   std::string output;
@@ -618,8 +602,7 @@ std::string ConjugateSymmetryBase<rOc,T>::print_details() const
 
 }
 
-template < enum Transform rOc,typename T>
-void ConjugateSymmetryBase<rOc,T>::set_MPI_NodeType()
+void ConjNodes::set_MPI_NodeType()
 {
 
   MPI_Datatype tmptype;
@@ -651,5 +634,3 @@ void ConjugateSymmetryBase<rOc,T>::set_MPI_NodeType()
 
   
 }
-
-template class fftwArr::ConjugateSymmetryBase<fftwArr::Transform::C2R,std::complex<double>>;

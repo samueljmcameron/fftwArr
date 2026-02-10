@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing conjugate_symmetry_3d capabilities."
+project(fftwArrExample VERSION 1.0 DESCRIPTION "Testing ConjNodes capabilities."
         LANGUAGES CXX)
 
 include(CheckIPOSupported)
@@ -52,9 +52,9 @@ MESSAGE(STATUS "FFTWARRTESTINGUTILS_LIBRARIES::" ${FFTWARRTESTINGUTILS_LIBRARIES
 
 
 
-add_executable(test-conjugate_symmetry_3d main.cpp)
+add_executable(test-conj_nodes main.cpp)
 
-target_link_libraries(test-conjugate_symmetry_3d PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
+target_link_libraries(test-conj_nodes PRIVATE MPI::MPI_CXX PkgConfig::FFTW-MPI PkgConfig::FFTWARR PkgConfig::FFTWARRTESTINGUTILS)
 
 
 MESSAGE(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})
