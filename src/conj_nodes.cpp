@@ -369,14 +369,13 @@ void ConjNodes::share_left_sends_recvs()
 }  
 
 
-
 void ConjNodes::update_right_sends_recvs()
 {
 
   
   if (right) {
     
-    for (int proc = me-1; proc >= 0; proc--) {
+    for (int proc = me; proc >= 0; proc--) {
       
       for (auto node : global_node_sends.at(proc))
 	
@@ -388,19 +387,20 @@ void ConjNodes::update_right_sends_recvs()
 	  node.your_bounds[0] = global_axis_size-node.my_bounds[1]+1;
 	  node.your_bounds[1] = global_axis_size-node.my_bounds[0]+1;
 	  recv_nodes.push_back(node);
-
+	  
 	}
       
       
       for (auto node : global_node_recvs.at(proc))
 	
 	if (node.proc == me) {
-
+	  
 	  node.proc = proc;
 	  node.my_bounds[0] = node.your_bounds[0];
 	  node.my_bounds[1] = node.your_bounds[1];
 	  node.your_bounds[0] = global_axis_size-node.my_bounds[1]+1;
 	  node.your_bounds[1] = global_axis_size-node.my_bounds[0]+1;
+
 	  send_nodes.push_back(node);
 
 	}

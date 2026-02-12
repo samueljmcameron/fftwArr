@@ -90,7 +90,6 @@ private:
 
 
   void update_right_sends_recvs();
-  void finit_right_sends_recvs();
   std::array<ptrdiff_t,2> get_vector_from_nodes(const std::vector<Node> &) const;
   
   void set_MPI_NodeType();
