@@ -168,7 +168,6 @@ void ConjNodes::set_local_bounds()
     // one
     if (global_axis_size % 2 == 0
 	&& local_axis_size + local_0_start == global_right_bounds.at(0)) {
-      std::cout << "MADE IT HERE ON PROCESSOR " << me << std::endl;
       left_bounds.at(1) -= 1;
     }
 
@@ -287,13 +286,6 @@ void ConjNodes::decide_left_sends_recvs()
 	auto low = right_tmp.at(0);
 	auto hi = right_tmp.at(1);
 
-	if (me == 1) {
-	  if (hi <= recv_from.at(0))
-	    std::cout << "proc: " << p << " has "
-		      << low << "," << hi
-		      << " and " << recv_from.at(0) << std::endl;
-	}
-	
 	ptrdiff_t first,last;
 	
 	if (hi - low > 0 && hi > recv_from.at(0) && low < recv_from.at(1)) {
